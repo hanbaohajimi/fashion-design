@@ -219,55 +219,42 @@ for (const width of [1440, 1280, 390, 320]) {
   });
 }
 
-test("讨论对象与发送一致：引用优先、失败保留、清空保留正文及切换会话隔离", async ({ page }) => {
+test("显式引用发送失败后保留草稿，清除引用和切换会话保持隔离", async ({ page }) => {
   const mocked = await mockWorkflow(page);
   await seedOpenAssistant(page);
-  mocked.getContext().focusNodeIds = ["candidate-a"];
-  await page.route("**/api/agent-conversations/chat-new/context", (route) => route.fulfill({ json: { ...mocked.getContext(), focusNodeIds: [], summaryRevision: 0 } }));
   await page.goto(`/${PROJECT_ID}`);
-  await page.getByRole("button", { name: "适合画布" }).click();
   const discussion = page.getByLabel("正在讨论", { exact: true });
   const input = page.getByRole("textbox", { name: "描述设计需求" });
-  await expect(discussion).toContainText("候选 A");
-  await page.locator('[data-type="candidate"]').filter({ hasText: "候选 B" }).click();
-  await expect(discussion).toContainText("候选 A");
-  expect(mocked.contextPatches).toHaveLength(0);
-  await input.fill("@候选 B 保留衣领");
-  await expect(discussion).toContainText("候选 B");
-  await expect(discussion).not.toContainText("候选 A");
-  await page.getByRole("button", { name: "移除引用 候选 B", exact: true }).click();
-  await expect(discussion).toContainText("候选 A");
-  await expect(input).toHaveValue(" 保留衣领");
-  await input.fill("@候选 B 保留衣领");
+  await input.fill("保留衣领");
+  await page.getByRole("button", { name: "添加素材", exact: true }).click();
+  await page.getByRole("button", { name: "添加引用", exact: true }).click();
+  const picker = page.getByRole("dialog", { name: "添加引用", exact: true });
+  await picker.getByRole("checkbox", { name: /生成图 B/ }).check();
+  await picker.getByRole("button", { name: "使用所选引用", exact: true }).click();
+  await expect(discussion).toContainText("生成图 B");
   let rejectSend = true;
-  await page.route("**/api/agent-conversations/*/workflow-messages", (route) => {
+  await page.route("**/api/agent-conversations/*/workflow-messages", route => {
     if (rejectSend) { rejectSend = false; return route.fulfill({ status: 503, json: { message: "发送失败，请重试" } }); }
     return route.fallback();
   });
-  await page.getByRole("button", { name: "发送需求" }).click();
-  await expect(input).toHaveValue("@候选 B 保留衣领");
-  await expect(discussion).toContainText("候选 B");
-  let rejectClear = true;
-  await page.route("**/api/agent-conversations/workflow-current/context", (route) => {
-    if (route.request().method() === "PATCH" && rejectClear) { rejectClear = false; return route.fulfill({ status: 409, json: { message: "讨论对象版本已更新，请重试" } }); }
-    return route.fallback();
-  });
-  await page.getByRole("button", { name: "改为讨论整个项目", exact: true }).click();
-  await expect(page.getByText("讨论对象版本已更新，请重试", { exact: false }).first()).toBeVisible();
-  await expect(input).toHaveValue("@候选 B 保留衣领");
-  expect(mocked.getContext().focusNodeIds).toEqual(["candidate-a"]);
-  await page.getByRole("button", { name: "改为讨论整个项目", exact: true }).click();
-  await expect(discussion).toContainText("整个项目");
-  await expect(input).toHaveValue(" 保留衣领");
-  expect(mocked.contextPatches.at(-1)).toMatchObject({ focusNodeIds: [], summaryRevision: 0 });
-  await page.getByRole("button", { name: "发送需求" }).click();
+  await page.getByRole("button", { name: "发送需求", exact: true }).click();
+  await expect(input).toHaveValue("保留衣领");
+  await expect(discussion).toContainText("生成图 B");
+  await discussion.getByRole("button", { name: "移除引用 生成图 B", exact: true }).click();
+  await expect(discussion).not.toContainText("生成图 B");
+  await expect(input).toHaveValue("保留衣领");
+  await page.getByRole("button", { name: "添加素材", exact: true }).click();
+  await page.getByRole("button", { name: "添加引用", exact: true }).click();
+  await picker.getByRole("checkbox", { name: /生成图 B/ }).check();
+  await picker.getByRole("button", { name: "使用所选引用", exact: true }).click();
+  await page.getByRole("button", { name: "发送需求", exact: true }).click();
   await expect.poll(() => mocked.workflowRequests.length).toBe(1);
-  expect(mocked.workflowRequests[0]).toMatchObject({ content: "保留衣领", referencedNodeIds: [], focusNodeIds: [] });
-  await input.fill("@候选 B 新会话不应继承这条引用");
+  expect(mocked.workflowRequests[0]).toMatchObject({ content: "保留衣领", referencedNodeIds: ["candidate-b"], focusNodeIds: ["candidate-b"] });
+  await input.fill("新会话不应继承这条引用");
   await page.getByRole("button", { name: "新建对话", exact: true }).click();
-  await expect(discussion).toContainText("整个项目");
   await expect(input).toHaveValue("");
-  await expect(page.getByRole("button", { name: "移除引用 候选 B", exact: true })).toHaveCount(0);
+  await expect(discussion.getByRole("button", { name: /移除引用/ })).toHaveCount(0);
+  expect(mocked.contextPatches).toHaveLength(0);
 });
 
 test("发送成功后讨论对象读取失败时不沿用旧焦点，恢复读取后再继续发送", async ({ page }) => {
