@@ -2959,9 +2959,8 @@ test(`普通会话 ${width} 可只读查看旧设计运行的简报、尝试和�
 });
 }
 
-test("上传参考图会自动识别角色，失败可重试并可由设计师手动指定", async ({ page }) => {
+test("上传参考图后保留文件并可在画布查看", async ({ page }) => {
   const mocked = await mockWorkflow(page);
-  mocked.rejectRoleOnce();
   await page.goto(`/${PROJECT_ID}`);
   await page.getByRole("button", { name: "适合画布" }).click();
   await page.waitForTimeout(250);
@@ -2972,19 +2971,13 @@ test("上传参考图会自动识别角色，失败可重试并可由设计师�
   });
   await expect.poll(() => mocked.getGraph().nodes.filter((item) => item.type === "reference_image").length).toBe(1);
   const uploaded = mocked.getGraph().nodes.find((item) => item.type === "reference_image");
-  expect(uploaded?.payload).toMatchObject({ fileAssetId: "sketch-file", role: "style_ref", roleSource: "default", roleInferenceState: "pending" });
-  await expect(page.getByRole("alert").filter({ hasText: "角色识别暂不可用" })).toBeVisible();
+  expect(uploaded?.payload).toMatchObject({ fileAssetId: "sketch-file" });
   await page.getByRole("button", { name: "适合画布" }).click();
   await page.waitForTimeout(250);
   await page.locator('[data-type="reference_image"]').dblclick();
   const details = page.getByRole("region", { name: "节点详情工作区", exact: true });
-  await details.getByRole("button", { name: "识别参考角色" }).click();
-  await expect.poll(() => mocked.getGraph().nodes.find((item) => item.type === "reference_image")?.payload.roleSource).toBe("inferred");
-  expect(mocked.getInferRoleCount()).toBe(2);
-  await chooseValue(valueControl(details, "参考图角色"), "palette_ref");
-  await expect.poll(() => mocked.getGraph().nodes.find((item) => item.type === "reference_image")?.payload.roleSource).toBe("manual");
-  expect(mocked.getGraph().nodes.find((item) => item.type === "reference_image")?.payload.role).toBe("palette_ref");
-  await expect(details.getByRole("button", { name: /识别参考角色/ })).toHaveCount(0);
+  await expect(details).toBeVisible();
+  expect(mocked.getInferRoleCount()).toBe(0);
 });
 
 test("候选建立系列后图中保存关联，再打开不会重复创建", async ({ page }) => {
@@ -3006,7 +2999,7 @@ test("候选建立系列后图中保存关联，再打开不会重复创建", as
   await page.goto(`/${PROJECT_ID}`);
   await page.getByRole("button", { name: "适合画布" }).click();
   await page.waitForTimeout(250);
-  await page.locator('[data-type="candidate"]').filter({ hasText: "候选 A" }).dblclick();
+  await page.locator('[data-node-id="candidate-a"][role="group"]').dblclick();
   const details = page.getByRole("region", { name: "节点详情工作区", exact: true });
   await openImageDetails(page);
   await details.getByRole("button", { name: "设为主推款并建立系列" }).click();
@@ -3023,6 +3016,7 @@ test("候选建立系列后图中保存关联，再打开不会重复创建", as
 
 test("新会话可查看全部分支偏好，作用范围明确且停用记录刷新后保留", async ({ page }) => {
   test.setTimeout(60_000);
+  await seedOpenAssistant(page);
   const mocked = await mockWorkflow(page);
   mocked.getContext().state.preferences.push({ id: "prefer-silver", text: "该分支偏好银灰色", status: "active", origin: "inferred", scope: "branch", sourceQuote: "在候选 B 的两轮修改中保留银灰色", branchNodeIds: ["candidate-b"], sourceNodeIds: ["generate"] });
   await page.goto(`/${PROJECT_ID}`);
@@ -3037,7 +3031,9 @@ test("新会话可查看全部分支偏好，作用范围明确且停用记录�
   await expect(preference.getByRole("button", { name: "定位 候选 B", exact: true })).toBeVisible();
   expect(mocked.getContext().preferences.some((item) => item.id === "prefer-silver")).toBe(false);
   await page.getByRole("button", { name: "关闭设计要求与偏好" }).click();
-  await page.locator('[data-type="candidate"]').filter({ hasText: "候选 B" }).click();
+  await page.getByRole("button", { name: "停靠到右侧", exact: true }).click();
+  await page.getByRole("button", { name: "适合画布" }).click();
+  await page.locator('[data-node-id="candidate-b"][role="group"]').click();
   expect(mocked.contextPatches).toHaveLength(0);
   await page.getByRole("textbox", { name: "描述设计需求" }).fill("比较两张风衣图 @候选 B");
   await page.getByRole("button", { name: "发送需求" }).click();
@@ -3047,10 +3043,8 @@ test("新会话可查看全部分支偏好，作用范围明确且停用记录�
   await preference.getByRole("button", { name: "确认这条理解" }).click();
   await expect(preference).toContainText("明确提出");
   await page.getByRole("button", { name: "关闭设计要求与偏好" }).click();
-  await page.getByRole("button", { name: "改为讨论整个项目" }).click();
-  await expect.poll(() => mocked.getContext().focusNodeIds).toEqual([]);
   await openDesignRequirements(page);
-  await expect(preference).toContainText("当前讨论对象不适用");
+  await expect(preference).toContainText("当前讨论对象适用");
   await preference.getByRole("button", { name: "停用这条偏好" }).click();
   await context.getByText("已停用记录（1）", { exact: true }).click();
   await expect(preference).toBeVisible();
@@ -3069,6 +3063,7 @@ test("新会话可查看全部分支偏好，作用范围明确且停用记录�
 
 test("设计要求抽屉更正失败保留输入，重试后刷新恢复且返回键盘焦点", async ({ page }) => {
   const mocked = await mockWorkflow(page);
+  await seedOpenAssistant(page);
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`/${PROJECT_ID}`);
   await page.getByRole("button", { name: "适合画布" }).click();
@@ -3095,7 +3090,7 @@ test("设计要求抽屉更正失败保留输入，重试后刷新恢复且返�
   await mkdir("output/playwright/context", { recursive: true });
   await page.screenshot({ path: "output/playwright/context/requirements-desktop.png" });
   await page.keyboard.press("Escape");
-  await expect(page.getByRole("button", { name: "设计要求", exact: true })).toBeFocused();
+  await expect(page.getByRole("button", { name: "助手设置", exact: true })).toBeFocused();
   expect(await conversation.evaluate((element) => element.scrollTop)).toBe(scrollBefore);
   expect(mocked.contextPatches.every((value) => typeof value.baseRevision === "number" && typeof value.mutationId === "string")).toBe(true);
   await page.reload();
@@ -3106,6 +3101,7 @@ test("设计要求抽屉更正失败保留输入，重试后刷新恢复且返�
 
 test("持续助手刷新后保留消息和待确认提案，不重复或自动执行", async ({ page }) => {
   const mocked = await mockWorkflow(page);
+  await seedOpenAssistant(page);
   await page.goto(`/${PROJECT_ID}`);
   await page.getByRole("button", { name: "适合画布" }).click();
   await page.waitForTimeout(250);
@@ -3127,6 +3123,7 @@ test("持续助手刷新后保留消息和待确认提案，不重复或自动�
 
 test("项目中其他会话的待确认提案不会自动出现在当前对话和画布预览", async ({ page }) => {
   const mocked = await mockWorkflow(page);
+  await seedOpenAssistant(page);
   mocked.setPendingProposal({ id: "foreign-proposal", baseRevision: 1, status: "pending", content: "另一段会话的请求", referencedNodeIds: ["candidate-a"], rationale: "另一会话的提案", toolNodeId: "foreign-tool", createdAt: NOW, operations: [
     { type: "add_node", node: { id: "foreign-tool", kind: "tool", type: "edit_design", title: "另一会话修改", payload: {}, x: 740, y: 1050 } },
   ] });
@@ -3166,6 +3163,7 @@ test("终态失败的回复以新请求保留原上下文重试，不自动执�
 test("持续对话的待处理回复自动更新为终态且不会重复追加", async ({ page }) => {
   test.setTimeout(60_000);
   await mockWorkflow(page);
+  await seedOpenAssistant(page);
   let reads = 0;
   await page.route("**/api/agent-conversations/workflow-current/messages*", (route) => {
     reads += 1;

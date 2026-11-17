@@ -83,6 +83,7 @@ export interface WorkflowAssetWorkspaceProps {
   assetId: string;
   open: boolean;
   onClose: () => void;
+  onSourceDetails?: () => void;
   onGraphRefresh: () => void;
   onEnsureConversation?: () => Promise<string>;
   onPrepareAssistantFeedback?: (request: {
@@ -135,6 +136,7 @@ function ImageWorkspace({
   assetId,
   projectId,
   onClose,
+  onSourceDetails,
   onGraphRefresh,
   onEnsureConversation,
   onPrepareAssistantFeedback,
@@ -664,6 +666,7 @@ function ImageWorkspace({
       <header className={styles.topbar}>
         <div className={styles.currentImage}><strong title={title}>{title}</strong><span>{size ? `${size.width} × ${size.height}` : "正在加载原图"}{!canEdit ? " · 仅查看" : ""}</span></div>
         <div className={styles.topActions} ref={menuAnchor}>
+          {onSourceDetails ? <Button onClick={onSourceDetails}>来源与设计决策</Button> : null}
           <Button ref={versionsTrigger} onClick={event => toggleMenu("versions", event.currentTarget)} aria-expanded={menu === "versions"} aria-controls={menu === "versions" ? menuId : undefined}>
             版本与对比<WorkspaceIcon name="chevron" />
           </Button>

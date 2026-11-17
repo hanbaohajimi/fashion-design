@@ -803,6 +803,7 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
   const [draftType, setDraftType] = useState<WorkflowAssetType | null>(null);
   const [libraryKind, setLibraryKind] = useState<LibraryKind | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [sourceDetailsId, setSourceDetailsId] = useState<string | null>(null);
   const [helpOpen, setHelpOpen] = useState(false);
   const [sketchOpen, setSketchOpen] = useState(false);
   const [editingSketch, setEditingSketch] = useState<WorkflowNode | null>(null);
@@ -1039,6 +1040,7 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
     (id: string) => {
       const target = graphRef.current?.nodes.find((node) => node.id === id);
       if (!target || target.status === "proposed") return;
+      setSourceDetailsId(null);
       const element = Array.from(
         document.querySelectorAll<HTMLElement>("[data-node-id]"),
       ).find(
@@ -2436,7 +2438,7 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
                                 });
                             }}
                           />
-                        ) : ["candidate", "reference_image", "sketch"].includes(sessionNode.type) &&
+                        ) : ["candidate", "reference_image", "sketch"].includes(sessionNode.type) && sourceDetailsId !== id &&
                           typeof sessionNode.payload.assetId === "string" ? (
                           <>
                             <BoardProjectContext.Provider value={projectId}>
@@ -2467,6 +2469,7 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
                                   setWorkspaceAssetId(assetId);
                                 }}
                                 onClose={closeSession}
+                                onSourceDetails={() => setSourceDetailsId(id)}
                                 onEnsureConversation={ensureConversation}
                                 onPrepareAssistantFeedback={prepareAssistantFeedback}
                                 onGraphRefresh={() => {
@@ -2482,7 +2485,10 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
                             </BoardProjectContext.Provider>
                           </>
                         ) : (
-                          renderDetails(sessionNode)
+                          <>
+                            {sourceDetailsId === id ? <Button onClick={() => setSourceDetailsId(null)}>返回图片工作区</Button> : null}
+                            {renderDetails(sessionNode)}
+                          </>
                         )}
                         {(sessionNode.type === "sketch" ||
                           sessionNode.type === "swatch") &&

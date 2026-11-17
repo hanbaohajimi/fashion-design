@@ -3,7 +3,6 @@ import { expect, type Page } from "@playwright/test";
 export async function openImageDetails(page: Page) {
   const image = page.getByRole("dialog", { name: "图片工作区", exact: true });
   await expect(image).toBeVisible();
-  await image.getByRole("button", { name: "图像", exact: true }).click();
   await image.getByRole("button", { name: "来源与设计决策", exact: true }).click();
 }
 
