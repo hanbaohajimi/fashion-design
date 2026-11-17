@@ -518,6 +518,7 @@ test("聚焦工作区：权限变化保留草稿，删除节点清理编辑会�
 
 test("聚焦工作区：Escape 层级、助手独立与快速反向切换", async ({ page }) => {
   const mocked = await mockWorkflow(page);
+  await seedOpenAssistant(page);
   const tool = mocked.getGraph().nodes.find((entry) => entry.id === "generate");
   if (!tool) throw new Error("缺少工具节点");
   Object.assign(tool, { canDelete: true });
@@ -591,6 +592,7 @@ test.describe("P1 宽屏触控", () => {
   test.use({ hasTouch: true });
   test("平板输入字号与缩放配置保持可用", async ({ page }) => {
     await mockWorkflow(page);
+    await seedOpenAssistant(page);
     await page.setViewportSize({ width: 1024, height: 768 });
     await page.goto(`/${PROJECT_ID}`);
     const expand = page.getByRole("button", { name: "展开设计助手" });
@@ -653,8 +655,10 @@ test("优化侧栏性能录制：普通图与压力图各三次十秒拖动", as
 
 test("P2 侧栏拖动提交最终宽度，取消恢复且 Tooltip 连续浏览即时", async ({ page }) => {
   await mockWorkflow(page);
+  await seedOpenAssistant(page);
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`/${PROJECT_ID}`);
+  await page.getByRole("button", { name: "停靠到右侧", exact: true }).click();
   const separator = page.getByRole("separator", { name: "调整侧栏宽度" });
   const box = await separator.boundingBox();
   if (!box) throw new Error("分隔条不可见");
@@ -674,9 +678,9 @@ test("P2 侧栏拖动提交最终宽度，取消恢复且 Tooltip 连续浏览�
 
 test("P1 手机助手在断点和键盘高度变化后保留内容", async ({ page }) => {
   await mockWorkflow(page);
+  await seedOpenAssistant(page);
   await page.setViewportSize({ width: 761, height: 900 });
   await page.goto(`/${PROJECT_ID}`);
-  await page.getByRole("button", { name: "助手", exact: true }).click();
   const assistant = page.getByRole("complementary", { name: "设计助手" });
   const input = assistant.locator("textarea").last();
   await input.fill("保留未发送的面料设计要求");
