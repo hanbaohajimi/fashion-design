@@ -245,7 +245,7 @@ test("系统深色偏好的短屏下长名称与图片读取失败仍可辨认�
   await pick(page, title);
   await composer(page).fill("保留版型与材质参考");
   const preview = discussion(page).getByRole("button", { name: title, exact: true });
-  await expect(preview).toContainText("服装方案");
+  await expect(preview).toContainText("设计图");
   await expect(preview.locator("img")).toHaveCount(0);
   await expect(preview).toBeInViewport({ ratio: 1 });
   await expect(page.getByRole("button", { name: "发送需求", exact: true })).toBeInViewport({ ratio: 1 });
