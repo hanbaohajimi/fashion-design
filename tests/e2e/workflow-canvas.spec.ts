@@ -31,25 +31,23 @@ test("助手入口：引用选择、对话草稿恢复与显式发送", async ({
   await page.goto(`/${PROJECT_ID}`);
   const input = page.getByRole("textbox", { name: "描述设计需求" });
   await expect(page.getByRole("button", { name: "历史对话", exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "设计要求", exact: true })).toBeVisible();
-  await page.getByRole("button", { name: /通勤外套方案/ }).click();
-  await expect(input).toHaveValue(/秋冬通勤风衣/);
+  await expect(page.getByRole("button", { name: "助手设置", exact: true })).toBeVisible();
+  await expect(input).toBeEnabled();
   expect(mocked.workflowRequests).toHaveLength(0);
   await input.fill("保留立领，只调整袖型");
+  await page.getByRole("button", { name: "添加素材", exact: true }).click();
   await page.getByRole("button", { name: "添加引用", exact: true }).click();
   const picker = page.getByRole("dialog", { name: "添加引用", exact: true });
-  await picker.getByRole("textbox", { name: "搜索项目对象" }).fill("候选 B");
-  await picker.getByRole("checkbox", { name: /候选 B/ }).check();
+  await picker.getByRole("textbox", { name: "搜索项目对象" }).fill("生成图 B");
+  await picker.getByRole("checkbox", { name: /生成图 B/ }).check();
   await picker.getByRole("button", { name: "使用所选引用" }).click();
-  await expect(page.getByRole("button", { name: "添加引用", exact: true })).toBeFocused();
-  await expect(page.getByLabel("正在讨论", { exact: true })).toContainText("本次发送的引用");
+  await expect(page.getByLabel("正在讨论", { exact: true })).toContainText("生成图 B");
   await page.getByRole("button", { name: "新建对话", exact: true }).click();
   await expect(input).toHaveValue("");
   await input.fill("新对话自己的草稿");
-  await page.getByRole("button", { name: "历史对话", exact: true }).click();
   await chooseValue(valueControl(page, "历史对话"), "workflow-current");
   await expect(input).toHaveValue("保留立领，只调整袖型");
-  await expect(page.getByLabel("正在讨论", { exact: true })).toContainText("候选 B");
+  await expect(page.getByLabel("正在讨论", { exact: true })).toContainText("生成图 B");
   await page.getByRole("button", { name: "发送需求", exact: true }).click();
   await expect.poll(() => mocked.workflowRequests.length).toBe(1);
   expect(mocked.workflowRequests[0]).toMatchObject({ referencedNodeIds: ["candidate-b"], focusNodeIds: ["candidate-b"] });
@@ -65,8 +63,9 @@ test("助手入口：发送、调整、确认、查看结果再继续修改", as
   await page.goto(`/${PROJECT_ID}`);
   const input = page.getByRole("textbox", { name: "描述设计需求" });
   await input.fill("请调整风衣袖型");
+  await page.getByRole("button", { name: "添加素材", exact: true }).click();
   await page.getByRole("button", { name: "添加引用", exact: true }).click();
-  await page.getByRole("checkbox", { name: /候选 A/ }).check();
+  await page.getByRole("checkbox", { name: /生成图 A/ }).check();
   await page.getByRole("button", { name: "使用所选引用" }).click();
   await page.getByRole("button", { name: "发送需求", exact: true }).click();
   await page.getByRole("button", { name: "修改生成要求", exact: true }).click();
@@ -93,6 +92,7 @@ test("助手入口：发送、调整、确认、查看结果再继续修改", as
   await expect(page.getByRole("dialog", { name: "图片工作区", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "关闭图片工作区", exact: true }).click();
   await input.fill("下一轮要保留的细节");
+  await page.getByRole("button", { name: "查看大图：新袖型方案", exact: true }).hover();
   await page.getByRole("button", { name: "继续修改：新袖型方案" }).click();
   await expect(input).toBeFocused();
   await expect(input).toHaveValue("下一轮要保留的细节");
@@ -103,6 +103,7 @@ test("助手入口：发送、调整、确认、查看结果再继续修改", as
 
 test("助手入口：恢复失效确认草稿时保留正文并要求重新核对", async ({ page }) => {
   const mocked = await mockWorkflow(page, "workbench");
+  await seedOpenAssistant(page);
   await page.goto(`/${PROJECT_ID}`);
   const input = page.getByRole("textbox", { name: "描述设计需求" });
   await input.fill("修改风衣袖型");
@@ -111,7 +112,6 @@ test("助手入口：恢复失效确认草稿时保留正文并要求重新核�
   await input.fill("保留这条修改草稿");
   await page.getByRole("button", { name: "新建对话", exact: true }).click();
   mocked.setMessages([{ id: "assistant-0", role: "assistant", status: "completed", content: "这条要求已有新版本", proposal: { id: "proposal-0", status: "superseded", toolNodeId: "old", operations: [], referencedNodeIds: [] } }]);
-  await page.getByRole("button", { name: "历史对话", exact: true }).click();
   await chooseValue(valueControl(page, "历史对话"), "workflow-current");
   await expect(input).toHaveValue("保留这条修改草稿");
   await expect(page.getByText("这条确认要求已失效或无法核实，请取消后重新描述需求。")).toBeVisible();
@@ -128,16 +128,17 @@ test("助手入口：手机从引用选择跳转添加素材，返回仍保留�
   mocked.getGraph().edges = [];
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`/${PROJECT_ID}`);
-  await page.getByRole("button", { name: "助手", exact: true }).click();
+  await page.getByRole("button", { name: "展开设计助手", exact: true }).click();
   const input = page.getByRole("textbox", { name: "描述设计需求" });
   await input.fill("等我添加面料参考");
+  await page.getByRole("button", { name: "添加素材", exact: true }).click();
   await page.getByRole("button", { name: "添加引用", exact: true }).click();
   await expect(page.getByText("项目中还没有素材或服装方案。")).toBeVisible();
   await page.getByRole("button", { name: "去添加素材", exact: true }).click();
   await expect(page.getByText("添加设计素材", { exact: true })).toBeVisible();
   await expect(page.locator("[data-workflow-add-menu] > button").first()).toBeFocused();
   await page.getByRole("button", { name: "关闭菜单", exact: true }).click();
-  await page.getByRole("button", { name: "助手", exact: true }).click();
+  await page.getByRole("button", { name: "展开设计助手", exact: true }).click();
   await expect(input).toHaveValue("等我添加面料参考");
   expect(mocked.workflowRequests).toHaveLength(0);
 });
@@ -150,9 +151,10 @@ test("助手入口：等待回复可准备下一条草稿，失效引用阻止�
   const input = page.getByRole("textbox", { name: "描述设计需求" });
   await input.fill("下一条需求");
   await expect(input).toBeEnabled();
-  await expect(page.getByRole("button", { name: "发送需求", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "停止回复", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "添加素材", exact: true }).click();
   await page.getByRole("button", { name: "添加引用", exact: true }).click();
-  await page.getByRole("checkbox", { name: /候选 A/ }).check();
+  await page.getByRole("checkbox", { name: /生成图 A/ }).check();
   await page.getByRole("button", { name: "使用所选引用" }).click();
   mocked.setMessages([{ id: "pending", role: "assistant", status: "completed", content: "已完成分析" }]);
   mocked.getGraph().nodes = mocked.getGraph().nodes.filter((node) => node.id !== "candidate-a");
@@ -1729,6 +1731,11 @@ async function mockWorkflow(page: Page, view: "workflow" | "workbench" = "workfl
       return route.fulfill({ json: created, status: 201 });
     }
     return route.fulfill({ json: { items: conversations, nextCursor: null } });
+  });
+  await page.route("**/api/agent-conversations/*", (route) => {
+    const id = new URL(route.request().url()).pathname.split("/").at(-1);
+    const conversation = conversations.find((item) => item.id === id);
+    return conversation ? route.fulfill({ json: conversation }) : route.fallback();
   });
   await page.route("**/api/agent-conversations/*/messages*", (route) => {
     const path = new URL(route.request().url()).pathname;
