@@ -5,6 +5,8 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
 import { seedReturningFeatureGuideUser } from "./feature-guide-fixture";
 import { mkdir, writeFile } from "node:fs/promises";
 import { REVIEW_VIEWPORTS, contrastFailures, controlFontFailures, tabTo } from "./review-accessibility";
+import { workspaceFixture } from "../visual/workspace-fixture";
+import { openCanvasFunction } from "./canvas-function-navigation";
 test.use({ video: process.env.FASHION_MOTION_VIDEO === "1" ? "on" : "off" });
 
 const PROJECT_ID = "e2e-workflow-canvas";
@@ -747,6 +749,11 @@ for (const width of [1440, 390]) {
 
 test("智能配色：系列 DNA 自动保存失败可重试，重新打开保留配色并遵守锁定", async ({ page }) => {
   await mockWorkflow(page);
+  await page.route(`**/api/projects/${PROJECT_ID}/canvas/initialize`, route => route.fulfill({ json: { projectId: PROJECT_ID, revision: 0, formatVersion: 1, snapshot: {}, bindings: [], initializedFrom: "workflow", mode: "canvas", canEdit: true } }));
+  await page.route(`**/api/projects/${PROJECT_ID}/canvas/creations`, route => route.fulfill({ json: { items: [], canEdit: true } }));
+  const studio = workspaceFixture();
+  studio.collections = [{ id: "palette-collection", name: "秋冬配色系列" }];
+  await page.route(`**/api/projects/${PROJECT_ID}/studio`, route => route.fulfill({ json: studio }));
   await page.route(`**/api/generations?*projectId=${PROJECT_ID}`, (route) => route.fulfill({ json: { items: [], nextCursor: null } }));
   let palette = [{ hex: "#40536D", name: "雾蓝" }, { hex: "#E6D8C6", name: "暖象牙" }];
   let locked = false;
@@ -768,9 +775,7 @@ test("智能配色：系列 DNA 自动保存失败可重试，重新打开保留
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto(`/${PROJECT_ID}`);
   const openCollection = async () => {
-    await page.getByRole("button", { name: "项目菜单", exact: true }).click();
-    await page.getByRole("button", { name: "系列", exact: true }).click();
-    await page.getByRole("button", { name: "秋冬配色系列", exact: true }).click();
+    await openCanvasFunction(page, "系列工作台");
   };
   await openCollection();
   const drawer = page.getByRole("dialog", { name: "系列工作台", exact: true });
@@ -786,7 +791,7 @@ test("智能配色：系列 DNA 自动保存失败可重试，重新打开保留
   await drawer.getByRole("button", { name: "重试保存" }).click();
   await expect.poll(() => palette.length).toBe(5);
   expect(palette.slice(0, 2)).toEqual([{ hex: "#40536D", name: "雾蓝" }, { hex: "#E6D8C6", name: "暖象牙" }]);
-  await drawer.getByRole("button", { name: "关闭系列工作台" }).click();
+  await drawer.getByRole("button", { name: "返回画布", exact: true }).click();
   await page.reload();
   await openCollection();
   await expect(drawer.getByLabel("颜色 3 名称")).toHaveValue("系列晨雾");
@@ -802,7 +807,7 @@ test("智能配色：系列 DNA 自动保存失败可重试，重新打开保留
   await expect(cancelPreview).toBeFocused();
   await page.screenshot({ path: "output/playwright/palette/dna-390-actions.png" });
   await cancelPreview.press("Enter");
-  const paletteSection = drawer.locator("section").filter({ has: page.getByRole("heading", { name: "色板", exact: true }) });
+  const paletteSection = drawer.locator("section").filter({ has: page.getByRole("heading", { name: "色板", exact: true }) }).last();
   await paletteSection.getByRole("button", { name: "锁定", exact: true }).click();
   await expect(drawer.getByRole("button", { name: "探索配色" })).toBeDisabled();
   await expect.poll(() => locked).toBe(true);
