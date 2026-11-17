@@ -123,12 +123,11 @@ test("引用显式加入且不自动发送，新结果提示不移动画布且�
   if (!bounds) throw new Error("候选节点没有可见位置");
   await page.mouse.click(bounds.x + bounds.width / 2, bounds.y + 25);
   const beforeSuggestion = writes;
-  await page
-    .getByRole("button", {
-      name: "引用选中对象「藏蓝通勤外套」",
-      exact: true,
-    })
-    .click();
+  await page.getByRole("button", { name: "添加素材", exact: true }).click();
+  await page.getByRole("button", { name: "添加引用", exact: true }).click();
+  const picker = page.getByRole("dialog", { name: "添加引用", exact: true });
+  await picker.getByRole("checkbox", { name: /藏蓝通勤外套/ }).check();
+  await picker.getByRole("button", { name: "使用所选引用", exact: true }).click();
   await expect(
     page.getByRole("textbox", { name: "描述设计需求", exact: true }),
   ).toHaveValue("");

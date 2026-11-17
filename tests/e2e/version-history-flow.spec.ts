@@ -153,12 +153,11 @@ test("主工作流从版本历史恢复后落新分支；图接入失败刷新�
   await workspace.getByRole("button", { name: /版本与对比/u }).click();
   await workspace.getByRole("button", { name: "版本历史", exact: true }).click();
   await workspace.getByRole("listitem").filter({ hasText: "初次生成" }).getByRole("button", { name: "恢复此版" }).click();
-  await expect(workspace.getByText("恢复版本已创建，正在等待加入画布。", { exact: false })).toBeVisible();
+  await expect(workspace.getByRole("button", { name: "继续恢复版本", exact: true })).toBeVisible();
   expect(restoreRequests).toHaveLength(1);
   expect(importedAssets).toEqual([restoredOne.id]);
-  const pendingKey = `fashion-restore-request:${current.id}:${root.id}`;
   const firstRequestId = restoreRequests[0]?.clientRequestId;
-  expect(await page.evaluate((key) => sessionStorage.getItem(key), pendingKey)).toBe(firstRequestId);
+  expect(firstRequestId).toBeTruthy();
 
   await page.reload();
   await page.getByRole("button", { name: "适合画布" }).click();
@@ -166,11 +165,11 @@ test("主工作流从版本历史恢复后落新分支；图接入失败刷新�
   workspace = page.getByRole("dialog", { name: "图片工作区", exact: true });
   await workspace.getByRole("button", { name: /版本与对比/u }).click();
   await workspace.getByRole("button", { name: "版本历史", exact: true }).click();
-  await workspace.getByRole("listitem").filter({ hasText: "初次生成" }).getByRole("button", { name: "恢复此版" }).click();
+  await workspace.getByRole("button", { name: "继续恢复版本", exact: true }).click();
   await expect.poll(() => graph.nodes.filter((item) => item.payload.assetId === restoredOne.id).length).toBe(1);
   expect(restoreRequests.map((item) => item.clientRequestId)).toEqual([firstRequestId, firstRequestId]);
   expect(importedAssets).toEqual([restoredOne.id, restoredOne.id]);
-  expect(await page.evaluate((key) => sessionStorage.getItem(key), pendingKey)).toBeNull();
+  await expect(workspace.getByRole("button", { name: "继续恢复版本", exact: true })).toHaveCount(0);
 
   await workspace.getByRole("button", { name: "关闭图片工作区" }).click();
   await expect(page.locator('[data-type="candidate"]').filter({ hasText: "恢复的版本" })).toHaveCount(1);

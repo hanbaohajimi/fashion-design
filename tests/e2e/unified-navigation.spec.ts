@@ -4,6 +4,7 @@ import { seedVisualApp, settleImages, PROJECT } from "../visual/fixtures";
 import { workspaceFixture } from "../visual/workspace-fixture";
 import { contrastFailures } from "./review-accessibility";
 import { openCanvasFunction } from "./canvas-function-navigation";
+import { prepareZhiya } from "./zhiya-fixture";
 
 async function openNavigation(page: Page) {
   if ((page.viewportSize()?.width ?? 1440) < 1200) {
@@ -158,7 +159,8 @@ test("工作室导航离开保护与面料返回保留项目", async ({ page }) 
 
 for (const width of [1440, 390])
   test(`连续进入项目、工作台和技术包 ${width}`, async ({ page }) => {
-    await page.setViewportSize({ width, height: 900 });
+    await prepareZhiya(page, { count: 1, realClock: true, viewport: { width, height: 900 } });
+    await page.route(`**/api/projects/${PROJECT}/studio`, route => route.fulfill({ json: workspaceFixture() }));
     await page.goto("/");
     await page.getByRole("link", { name: /秋冬通勤服装设计/ }).click();
     await expect(page).toHaveURL(new RegExp(`/${PROJECT}$`));
