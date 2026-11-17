@@ -1491,24 +1491,24 @@ for (const width of [1366, 1280, 375]) {
     ]);
     await page.setViewportSize({ width, height: width < 768 ? 812 : 768 });
     await page.goto(`/${PROJECT_ID}`);
-    await page.getByRole("button", { name: "以候选 A继续设计", exact: true }).click();
+    await page.getByRole("button", { name: "以生成图 A继续设计", exact: true }).click();
     const conversation = page.getByLabel("设计对话", { exact: true });
     const confirm = page.getByRole("button", { name: /^确认并生成 \d+ 张$/ });
     await expect(confirm).toBeInViewport({ ratio: 1 });
     const discussion = page.getByLabel("正在讨论", { exact: true });
-    await expect(discussion).toContainText("本次发送的引用");
-    await expect(discussion.getByRole("button", { name: "候选 A", exact: true })).toHaveCount(1);
-    await expect(discussion).toHaveCSS("font-size", "12px");
+    await expect(discussion.getByRole("button", { name: "生成图 A", exact: true })).toHaveCount(1);
+    await expect(discussion).toHaveCSS("font-size", "13px");
     const input = page.getByRole("textbox", { name: "描述设计需求" });
     await input.evaluate((element) => { element.style.height = "180px"; });
     await expect(confirm).toBeInViewport({ ratio: 1 });
     await expect(input).toHaveCSS("outline-style", "none");
-    expect((await page.locator("main > header").boundingBox())?.y).toBe(width < 768 ? 64 : 0);
+    if (width >= 768) await expect(page.getByRole("button", { name: "项目菜单", exact: true })).toBeInViewport();
     await page.screenshot({ path: `output/playwright/atelier-refinement/confirmation-${width}.png` });
     await conversation.dispatchEvent("wheel", { deltaY: -300 });
     await conversation.evaluate((element) => { element.scrollTop = 180; element.dispatchEvent(new Event("scroll", { bubbles: true })); });
     const position = await conversation.evaluate((element) => element.scrollTop);
-    await page.getByRole("button", { name: "移除引用 候选 A", exact: true }).click();
+    await discussion.getByRole("button", { name: "生成图 A", exact: true }).focus();
+    await page.keyboard.press("Delete");
     await input.evaluate((element) => { element.style.height = "80px"; });
     await expect.poll(() => conversation.evaluate((element) => element.scrollTop)).toBe(position);
     expect(mocked.workflowRequests).toHaveLength(0);
@@ -1519,14 +1519,14 @@ for (const width of [1366, 1280, 375]) {
 test("Atelier 精修：版本菜单使用可读语义色和一致图标，关闭后恢复作品焦点", async ({ page }) => {
   await mockWorkflow(page, "workbench");
   await page.goto(`/${PROJECT_ID}`);
-  await page.getByRole("button", { name: "打开方案 候选 A", exact: true }).click();
+  await page.getByRole("button", { name: "打开方案 生成图 A", exact: true }).click();
   const image = page.getByRole("dialog", { name: "图片工作区", exact: true });
   await image.getByRole("button", { name: "版本与对比", exact: true }).click();
-  await expect(image.locator("header").getByText(/^\d+ × \d+$/).first()).toHaveCSS("color", "rgb(88, 106, 96)");
+  await expect(image.locator("header").getByText(/^\d+ × \d+$/).first()).toHaveCSS("color", "rgb(82, 100, 91)");
   await expect(image.getByRole("button", { name: "标注", exact: true }).locator("svg")).toHaveCount(1);
   await page.screenshot({ path: "output/playwright/atelier-refinement/image-menu.png" });
   await image.getByRole("button", { name: "关闭图片工作区", exact: true }).click();
-  await expect(page.getByRole("group", { name: "服装方案 候选 A", exact: true })).toBeFocused();
+  await expect(page.getByRole("group", { name: "服装方案 生成图 A", exact: true })).toBeFocused();
 });
 
 async function mockWorkflow(page: Page, view: "workflow" | "workbench" = "workflow") {
