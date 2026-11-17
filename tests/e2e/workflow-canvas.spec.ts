@@ -964,6 +964,7 @@ test.describe("助手和上传的真实状态动效", () => {
 
   test("发送暂存气泡与先到轮询按请求ID归并，同时保留其他消息", async ({ page }) => {
     const mocked = await mockWorkflow(page);
+    await seedOpenAssistant(page);
     let release = () => {};
     const gate = new Promise<void>((resolve) => { release = resolve; });
     let releasePoll = () => {};
