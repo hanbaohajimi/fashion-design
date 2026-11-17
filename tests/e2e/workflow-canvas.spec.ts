@@ -1990,11 +1990,11 @@ test("Fig8 手动参数遵循统一契约，执行前创建会话并绑定执行
   await expect(page.locator('[data-kind="tool"]')).toHaveCount(4);
   await page.evaluate(() => window.dispatchEvent(new CustomEvent("fashion-workflow:node-details", { detail: "fig8-manual" })));
   await page.getByText("高级设置", { exact: true }).click();
-  await page.getByRole("spinbutton", { name: "候选数量", exact: true }).fill("4");
+  await page.getByRole("spinbutton", { name: "生成数量", exact: true }).fill("4");
   await chooseValue(valueControl(page, "图像质量"), "auto");
-  await page.getByRole("spinbutton", { name: "参考强度 肩线参考", exact: true }).fill("0.4");
   await page.getByRole("button", { name: "保存工具参数", exact: true }).click();
-  await expect.poll(() => draft.payload.params).toMatchObject({ count: 4, quality: "auto", referenceInputs: [{ nodeId: reference.id, role: "detail_ref", weight: 0.4 }] });
+  await expect.poll(() => draft.payload.params).toMatchObject({ count: 4, quality: "auto", referenceInputs: [] });
+  expect(mocked.getGraph().edges).toContainEqual(edge("fig8-reference", reference.id, draft.id, "reference"));
   await page.getByRole("button", { name: "确认并执行", exact: true }).click();
   await expect.poll(() => mocked.executionRequests.length).toBe(1);
   expect(mocked.executionRequests[0]).toMatchObject({ conversationId: "chat-new" });
@@ -2002,6 +2002,7 @@ test("Fig8 手动参数遵循统一契约，执行前创建会话并绑定执行
 
 test("一次跳过建议，不再出现重复确认表单且不触发执行", async ({ page }) => {
   const mocked = await mockWorkflow(page);
+  await seedOpenAssistant(page);
   await page.goto(`/${PROJECT_ID}`);
   await page.getByRole("button", { name: "适合画布" }).click();
   await page.waitForTimeout(250);
@@ -2042,7 +2043,7 @@ test("主画布完整显示设计路径，节点保存与拖拽可在刷新后�
   await page.setViewportSize({ width: 1440, height: 900 });
 
   await page.getByRole("button", { name: "＋ 添加工具" }).click();
-  await page.getByRole("button", { name: /局部修改 候选/ }).click();
+  await page.getByRole("button", { name: /局部修改 图片/ }).click();
   await expect(canvas.locator('[data-type="edit_design"]')).toHaveCount(1);
   const newNode = mocked.getGraph().nodes.find((item) => item.type === "edit_design");
   expect(newNode).toBeDefined();
@@ -2289,8 +2290,8 @@ test("@节点提案先以虚线预览，确认后保留分支并直接执行", a
   await page.waitForTimeout(250);
   await expect(page.getByText("保持藏蓝与宽松廓形，给我两种通勤风衣方案。")).toHaveCount(0);
   const composer = page.getByRole("textbox", { name: "描述设计需求" });
-  await composer.fill("请修改 @候选");
-  await page.getByRole("option", { name: /候选 A/ }).click();
+  await composer.fill("请修改 @生成图");
+  await page.getByRole("option", { name: /生成图 A/ }).click();
   await expect(composer).toHaveValue("请修改 @候选 A ");
   await page.getByRole("button", { name: "发送需求" }).click();
   await expect(page.locator('[data-role="user"]').getByText("请修改 @候选 A", { exact: false })).toBeVisible();
@@ -2368,12 +2369,12 @@ test("功能指引隔离画布快捷键，退出后保留原有连线选择", as
   const graphBefore = structuredClone(mocked.getGraph());
   const canvas = page.locator(".tl-canvas").first();
 
-  await page.getByRole("button", { name: "workflow@example.com", exact: true }).click();
-  await page.getByRole("button", { name: "功能指引", exact: true }).click();
+  await page.getByRole("button", { name: "工作室帮助", exact: true }).click();
+  await page.getByRole("button", { name: "查看界面指引", exact: true }).click();
   const guide = page.getByRole("dialog", { name: "界面功能指引", exact: true });
   await expect(guide).toBeVisible();
   await expect(guide).toHaveAttribute("data-phase", "open");
-  await guide.getByRole("button", { name: "下一步", exact: true }).focus();
+  await guide.getByRole("button", { name: /^(下一步|完成)$/u }).focus();
   const cursorBefore = await canvas.evaluate((element) => getComputedStyle(element).cursor);
   for (const key of ["Delete", "Backspace", "Shift+L"]) {
     await page.keyboard.press(key);
@@ -2390,7 +2391,7 @@ test("功能指引隔离画布快捷键，退出后保留原有连线选择", as
   await expect(guide).toBeHidden();
   await expect(selectedWire).toHaveAttribute("data-selected", "true");
   await expect(page.getByLabel("连接操作")).toBeVisible();
-  await expect(page.getByRole("button", { name: "workflow@example.com", exact: true })).toBeFocused();
+  await expect(page.getByRole("button", { name: "工作室帮助", exact: true })).toBeFocused();
   expect(writes).toEqual([]);
   expect(mocked.getGraph()).toEqual(graphBefore);
 });
