@@ -139,7 +139,7 @@ test("候选可上传原尺寸蒙版，失败重试保留同一修改分支与�
   const workspace = await openCandidate(page);
   await workspace.getByRole("button", { name: "局部重绘", exact: true }).click();
   await workspace.getByRole("textbox", { name: "局部重绘说明" }).fill("将领口改成窄驳领，保持原有面料");
-  await expectValue(valueControl(workspace.getByRole("region", { name: "候选资产工作台", exact: true }), "参考色卡 可选"), "");
+  await expectValue(valueControl(workspace.getByRole("region", { name: "图片资产工作台", exact: true }), "参考色卡 可选"), "");
   await workspace.getByRole("button", { name: "提交局部重绘" }).click();
   await expect(workspace.getByRole("alert")).toContainText("请先涂抹需要修改的区域");
   const canvas = workspace.getByLabel("局部重绘掩码画布");
@@ -180,7 +180,7 @@ test("候选可上传原尺寸蒙版，失败重试保留同一修改分支与�
   await openCandidate(page);
   await workspace.getByRole("button", { name: "局部重绘", exact: true }).click();
   await workspace.getByRole("textbox", { name: "局部重绘说明" }).fill("将口袋改成贴袋，保持廓形");
-  await chooseValue(valueControl(workspace.getByRole("region", { name: "候选资产工作台", exact: true }), "参考色卡 可选"), "palette");
+  await chooseValue(valueControl(workspace.getByRole("region", { name: "图片资产工作台", exact: true }), "参考色卡 可选"), "palette");
   await workspace.getByRole("button", { name: "标记中央区域" }).click();
   await workspace.getByRole("button", { name: "提交局部重绘" }).click();
   await expect(workspace.getByRole("img", { name: "原始短款外套", exact: true })).toBeVisible();
