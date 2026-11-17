@@ -95,7 +95,7 @@ for (const viewport of [
       exact: true,
     });
     await expect(list.getByRole("option")).toHaveText([
-      "设计方案",
+      "设计图",
       "系列造型（1）",
       "系列造型（2）",
       "设计要求",
@@ -109,7 +109,7 @@ for (const viewport of [
       ),
     ).toHaveCount(0);
     const thumbnail = list
-      .getByRole("option", { name: "设计方案", exact: true })
+      .getByRole("option", { name: "设计图", exact: true })
       .locator("img");
     await expect(thumbnail).toHaveCSS("object-fit", "contain");
     await expect

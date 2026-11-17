@@ -27,6 +27,7 @@ test("从选定款式继续技术包保持确切修订，未保存内容仍受�
   await page.goto(`/${PROJECT}/studio?tab=styles`);
   await page.locator("summary").filter({ hasText: "切换款式" }).click();
   await page.getByRole("button", { name: /CT-102 长款通勤风衣/ }).click();
+  await page.getByRole("button", { name: "继续创作与交付", exact: true }).click();
   await page.getByRole("button", { name: "继续技术包", exact: true }).click();
   await expect(page).toHaveURL(/styleRevisionId=style-second-r3/);
   await expectValue(page.getByLabel("对应款式修订"), "style-second-r3");
@@ -34,7 +35,7 @@ test("从选定款式继续技术包保持确切修订，未保存内容仍受�
   await expect(object).toContainText("长款通勤风衣");
   await expect(object).toContainText("款式修订 r3");
   await page.getByLabel("技术包名称", { exact: true }).fill("风衣生产资料草稿");
-  await page.getByRole("link", { name: "设计工作台", exact: true }).click();
+  await page.getByRole("button", { name: "返回画布", exact: true }).click();
   const guard = page.getByRole("dialog", { name: "保留未保存的修改" });
   await expect(guard).toBeVisible();
   await guard.getByRole("button", { name: "继续编辑", exact: true }).click();
@@ -83,17 +84,15 @@ for (const viewport of [
     );
     for (const path of ["/", `/${PROJECT}/studio?tab=tech`]) {
       await page.goto(path);
-      if (path === "/")
+      if (path === "/") {
+        if (viewport.width < 768) await page.getByRole("button", { name: "展开工作区目录", exact: true }).click();
         await expect(
           page.getByRole("navigation", { name: "工作区导航", exact: true }),
         ).toBeVisible();
-      else if (viewport.width < 1200)
+        if (viewport.width < 768) await page.keyboard.press("Escape");
+      } else
         await expect(
-          page.getByLabel("当前功能", { exact: true }),
-        ).toBeVisible();
-      else
-        await expect(
-          page.getByRole("tablist", { name: "设计工作室功能" }),
+          page.getByRole("button", { name: "返回画布", exact: true }),
         ).toBeVisible();
       await expect(page.locator("main h1, main h2").first()).toBeVisible();
       expect(
