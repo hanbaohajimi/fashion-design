@@ -91,7 +91,7 @@ test("工作流 PNG 导出包含紧凑工具名称和素材文字", async ({ pag
   }));
 
   const downloadPromise = page.waitForEvent("download");
-  await page.getByText("资料与更多", { exact: true }).click();
+  await page.getByRole("button", { name: "工作室帮助", exact: true }).click();
   await page.getByRole("button", { name: "导出画布 PNG", exact: true }).click();
   const download = await downloadPromise;
   expect(download.suggestedFilename()).toBe(`fashion-workflow-${PROJECT_ID}.png`);

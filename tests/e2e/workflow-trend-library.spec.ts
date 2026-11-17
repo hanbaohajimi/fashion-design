@@ -112,7 +112,7 @@ test("趋势档案保留真实主题并把原记录与色卡加入工作流，�
   });
   await page.goto("/trends?from=board&boardId=workflow-trends");
   await expect(
-    page.getByRole("heading", { name: "趋势档案", exact: true }),
+    page.getByRole("heading", { name: "发现", exact: true }),
   ).toBeVisible();
   await expect(
     page.getByRole("link", { name: "整理成趋势简报", exact: true }),

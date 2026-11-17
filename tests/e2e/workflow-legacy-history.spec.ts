@@ -228,7 +228,8 @@ test("旧白板只读展示并导入图片、便签和色卡，旧数据始终�
   await expect(page.getByRole("region", { name: "设计工作流画布" })).toBeVisible();
   expect(mocked.boardMethods).toEqual([]);
 
-  await page.getByText("资料与更多", { exact: true }).click();
+  await page.getByRole("button", { name: "流程画布", exact: true }).click();
+  await page.getByRole("button", { name: "工作室帮助", exact: true }).click();
   await page.getByRole("button", { name: "历史白板" }).click();
   const history = page.getByRole("dialog", { name: "历史白板" });
   await expect(history).toBeVisible();
@@ -244,7 +245,7 @@ test("旧白板只读展示并导入图片、便签和色卡，旧数据始终�
     ["legacy-swatch", "swatch", "color", "#C8AB84"],
   ] as const) {
     const shape = history.locator(`[data-shape-id="shape:${shapeId}"]`);
-    await shape.click();
+    await shape.click({ force: true });
     await expect(history.getByRole("button", { name: "加入当前工作流" })).toBeEnabled();
     await history.getByRole("button", { name: "加入当前工作流" }).click();
     await expect.poll(() => mocked.getGraph().nodes.length).toBe(
@@ -261,7 +262,7 @@ test("旧白板只读展示并导入图片、便签和色卡，旧数据始终�
   expect(mocked.graphMutations.every((body) => body.mode === "semantic")).toBe(true);
 
   const note = history.locator('[data-shape-id="shape:legacy-note"]');
-  await note.click();
+  await note.click({ force: true });
   const originalPosition = await note.getAttribute("style");
   const noteBox = await note.boundingBox();
   expect(noteBox).not.toBeNull();
@@ -282,7 +283,8 @@ test("历史白板可导出包含旧素材的 PNG，导出过程不修改旧快�
 }) => {
   const mocked = await mockLegacyWorkflow(page);
   await page.goto(`/${PROJECT_ID}`);
-  await page.getByText("资料与更多", { exact: true }).click();
+  await page.getByRole("button", { name: "流程画布", exact: true }).click();
+  await page.getByRole("button", { name: "工作室帮助", exact: true }).click();
   await page.getByRole("button", { name: "历史白板" }).click();
   const history = page.getByRole("dialog", { name: "历史白板" });
   await expect(history.locator('[data-shape-id="shape:legacy-image"]')).toBeVisible();

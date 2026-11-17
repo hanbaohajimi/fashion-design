@@ -2729,6 +2729,16 @@ function WorkflowCanvasSession({ projectId }: WorkflowCanvasProps) {
                 </li>
               </ol>
               <div className={styles.dialogActions}>
+                {canvasMode !== "canvas" && canvasView === "workflow" ? (
+                  <Button disabled={exporting} onClick={() => { setHelpOpen(false); void exportCanvas(); }}>
+                    导出画布 PNG
+                  </Button>
+                ) : null}
+                {canvasMode !== "canvas" && graph.legacyAvailable ? (
+                  <Button onClick={() => { setHelpOpen(false); setHistoryOpen(true); }}>
+                    历史白板
+                  </Button>
+                ) : null}
                 <Button onClick={() => { setHelpOpen(false); startGuide(); }}>
                   查看界面指引
                 </Button>

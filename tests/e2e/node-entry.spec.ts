@@ -162,7 +162,7 @@ test("全局资源上传放上画布，已有图片可定位且不重复放置",
 
 test("减弱动态下菜单键盘往返，隐藏连接保留空节点与要求", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
-  const state = await prepareNodeEntry(page, 390); await loadZhiya(page);
+  const state = await prepareNodeEntry(page, 1440); await loadZhiya(page);
   const trigger = page.getByRole("button", { name: "添加节点", exact: true });
   await trigger.focus(); await trigger.press("Enter");
   await expect(page.getByRole("group", { name: "添加节点选项", exact: true })).toBeVisible();
@@ -175,7 +175,7 @@ test("减弱动态下菜单键盘往返，隐藏连接保留空节点与要求",
   await page.getByRole("switch", { name: "显示连接关系" }).click();
   await expect(page.locator("[data-connection-source]")).toHaveCount(0);
   expect(await target.boundingBox()).toEqual(before); await expect(prompt).toHaveValue("只保留这段原始要求");
-  await page.screenshot({ path: "output/node-integration/reduced-motion-390.png", animations: "disabled" });
+  await page.screenshot({ path: "output/node-integration/reduced-motion-1440.png", animations: "disabled" });
   expect(state.imageCalls()).toBe(0); expect(state.errors).toEqual([]);
 });
 

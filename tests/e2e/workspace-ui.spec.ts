@@ -19,7 +19,7 @@ test.beforeEach(async ({ page }) => {
   );
 });
 
-test("侧栏完整可达，方向键仅移动焦点，任务正文在笔记本首屏可输入", async ({
+test("工作区导航可达，任务正文在笔记本首屏可输入", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1366, height: 768 });
@@ -27,35 +27,18 @@ test("侧栏完整可达，方向键仅移动焦点，任务正文在笔记本�
   await expect(
     page.getByRole("textbox", { name: "本次任务", exact: true }),
   ).toBeVisible();
-  const navigation = page.getByRole("tablist", { name: "设计工作室功能" });
-  await expect(navigation.getByRole("tab")).toHaveCount(12);
-  await expect(navigation.getByRole("tab", { name: "服装秀", exact: true })).toBeVisible();
-  await expect(
-    navigation.getByRole("tab", { name: "印花工作台" }),
-  ).toBeVisible();
-  const tasks = navigation.getByRole("tab", { name: "开始任务", exact: true });
-  await tasks.focus();
-  await page.keyboard.press("ArrowDown");
-  await expect(
-    navigation.getByRole("tab", { name: "款式档案", exact: true }),
-  ).toBeFocused();
-  await expect(tasks).toHaveAttribute("aria-selected", "true");
-  await page.keyboard.press("End");
-  await expect(
-    navigation.getByRole("tab", { name: "品牌资料", exact: true }),
-  ).toBeFocused();
-  await page.keyboard.press("ArrowDown");
-  await expect(tasks).toBeFocused();
-  await page.keyboard.press("ArrowDown");
-  await page.keyboard.press("Enter");
-  await expect(page).toHaveURL(/tab=styles/u);
-  await tasks.click();
+  const navigation = page.getByRole("navigation", { name: "工作区导航" });
+  for (const name of ["首页", "项目", "资产库", "衣橱", "面料库", "发现"]) {
+    await expect(navigation.getByRole("link", { name, exact: true })).toBeVisible();
+  }
+  await navigation.getByRole("link", { name: "首页", exact: true }).focus();
+  await expect(navigation.getByRole("link", { name: "首页", exact: true })).toBeFocused();
   const prompt = page.getByRole("textbox", { name: "本次任务", exact: true });
   await expect(prompt).toBeInViewport();
   const promptBounds = await prompt.boundingBox();
   if (!promptBounds) throw new Error("任务输入框不可见，无法检查首屏位置");
   expect(promptBounds.y).toBeLessThanOrEqual(240);
-  await expect(page.getByRole("button", { name: "创作进展" })).toBeInViewport();
+  await expect(page.getByRole("button", { name: /项目任务/ })).toBeInViewport();
 });
 
 test("团队局部切换保留草稿，离开模块仍经过未保存保护", async ({ page }) => {

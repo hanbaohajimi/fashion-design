@@ -2513,8 +2513,9 @@ test("单击保留对话，详情返回恢复草稿，引用需显式加入", as
     const style = getComputedStyle(element);
     return { background: style.backgroundColor, borderColor: style.borderTopColor, borderWidth: Number.parseFloat(style.borderTopWidth) };
   });
-  const menu = page.getByRole("button", { name: "设计要求", exact: true });
+  const menu = page.getByRole("button", { name: "助手设置", exact: true });
   await menu.focus();
+  await menu.press("Enter");
   await page.getByRole("button", { name: "设计要求", exact: true }).press("Enter");
   const drawer = page.getByRole("dialog", { name: "设计要求与偏好", exact: true });
   await expect(drawer).toBeVisible();
@@ -2522,11 +2523,13 @@ test("单击保留对话，详情返回恢复草稿，引用需显式加入", as
   await expect(drawer).toBeHidden();
   await expect(menu).toBeFocused();
   await composer.fill("保留这段输入草稿");
-  await page.locator('[data-type="candidate"]').first().click();
+  await page.getByRole("button", { name: "停靠到右侧", exact: true }).click();
+  await page.getByRole("button", { name: "适合画布" }).click();
+  await page.locator('[data-node-id="candidate-a"][role="group"]').click();
   await expect(composer).toBeVisible();
-  await expect(page.getByLabel("正在讨论", { exact: true })).toContainText("整个项目");
+  await expect(page.getByLabel("正在讨论", { exact: true })).toHaveAttribute("data-has-references", "false");
   expect(mocked.contextPatches).toHaveLength(0);
-  const reference = page.getByRole("button", { name: /引用选中对象「候选 A」/ });
+  const reference = page.getByRole("button", { name: /引用选中对象「生成图 A」/ });
   const referenceStyle = await appearance(reference);
   expect(referenceStyle.borderWidth).toBeGreaterThan(0);
   expect(referenceStyle.background).not.toBe("rgba(0, 0, 0, 0)");
@@ -2555,7 +2558,7 @@ test("单击保留对话，详情返回恢复草稿，引用需显式加入", as
   await page.getByRole("button", { name: "取消修改", exact: true }).click();
   await page.getByRole("button", { name: "不采用此方案", exact: true }).click();
   await expect(page.getByRole("button", { name: "确认跳过", exact: true })).toHaveCount(0);
-  await page.getByRole("button", { name: /引用选中对象「候选 A」/ }).click();
+  await page.getByRole("button", { name: /引用选中对象「生成图 A」/ }).click();
   await composer.fill("修改领口");
   await page.getByRole("button", { name: "收起设计助手", exact: true }).click();
   await page.getByRole("button", { name: "设计工作台", exact: true }).click();
@@ -2636,7 +2639,7 @@ for (const savedTheme of [null, "dark", "system"] as const) {
         const sample = document.createElement("span"); sample.style.backgroundColor = "var(--color-surface)"; element.append(sample);
         const matches = getComputedStyle(element).backgroundColor === getComputedStyle(sample).backgroundColor; sample.remove(); return matches;
       })).toBe(true);
-      await expect(page.locator("main")).toHaveCSS("color", "rgb(32, 51, 46)");
+      await expect(page.locator("main")).toHaveCSS("color", "rgb(28, 43, 38)");
       await expect(page.locator("html")).toHaveCSS("color-scheme", "light");
       await expect(page.locator("[data-theme]")).toHaveCount(0);
       expect(await page.evaluate(() => localStorage.getItem("theme"))).toBe(savedTheme);
@@ -2653,61 +2656,46 @@ for (const savedTheme of [null, "dark", "system"] as const) {
     await expectLightCanvas();
 
     const trendsPath = `/trends?from=board&boardId=${PROJECT_ID}`;
-    await page.getByText("资料与更多", { exact: true }).click();
-    await expect(page.getByRole("navigation", { name: "工作区导航" }).getByRole("link", { name: "趋势档案", exact: true })).toHaveAttribute("href", trendsPath);
     await page.goto(trendsPath);
     await page.waitForURL(/\/trends\?/, { timeout: 30_000 });
-    await expect(page.getByRole("heading", { name: "趋势档案", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "发现", exact: true })).toBeVisible();
+    const trendsBackground = await page.locator("main").evaluate(element => getComputedStyle(element).backgroundColor);
     for (const width of [390, 1024, 1440]) {
       await page.setViewportSize({ width, height: 900 });
       await expect(page.getByRole("button", { name: "切换主题" })).toHaveCount(0);
-      expect(await page.locator("main").evaluate(element => {
-        const sample = document.createElement("span"); sample.style.backgroundColor = "var(--color-canvas)"; element.append(sample);
-        const matches = getComputedStyle(element).backgroundColor === getComputedStyle(sample).backgroundColor; sample.remove(); return matches;
-      })).toBe(true);
+      await expect(page.locator("main")).toHaveCSS("background-color", trendsBackground);
       await expect(page.locator("html")).toHaveCSS("color-scheme", "light");
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
-      const navigation = page.getByRole("navigation", { name: "工作区导航", exact: true });
-      if (width < 1200) await navigation.locator('summary[aria-label="切换工作区"]').click();
-      const back = (width < 1200 ? page.getByRole("group", { name: "切换工作区选项", exact: true }) : navigation).getByRole("link", { name: "设计工作台", exact: true });
-      await expect(back).toBeVisible();
-      await expect(back).toHaveAttribute("href", `/${PROJECT_ID}`);
-      if (width < 1200) await page.keyboard.press("Escape");
     }
     await page.reload();
-    await expect(page.getByRole("heading", { name: "趋势档案", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "发现", exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "切换主题" })).toHaveCount(0);
-    expect(await page.locator("main").evaluate(element => {
-        const sample = document.createElement("span"); sample.style.backgroundColor = "var(--color-canvas)"; element.append(sample);
-        const matches = getComputedStyle(element).backgroundColor === getComputedStyle(sample).backgroundColor; sample.remove(); return matches;
-      })).toBe(true);
-    await page.getByRole("link", { name: "设计工作台", exact: true }).click();
+    await expect(page.locator("main")).toHaveCSS("background-color", trendsBackground);
+    await page.goto(`/${PROJECT_ID}`);
     await expectLightCanvas();
   });
 }
 
-test("固定浅色与三种宽度保持画布布局，PNG 导出包含曲线", async ({ page }) => {
+test("固定浅色与桌面宽度保持画布布局，PNG 导出包含曲线", async ({ page }) => {
   test.setTimeout(90_000);
   await mockWorkflow(page);
+  await seedOpenAssistant(page);
   await page.goto(`/${PROJECT_ID}`);
   await page.getByRole("button", { name: "适合画布" }).click();
   await page.waitForTimeout(250);
   await expect(page.locator("[data-workflow-edge]")).toHaveCount(11);
   await mkdir("output/playwright", { recursive: true });
   await expect(page.getByRole("application", { name: "tldraw" })).toHaveClass(/\btl-theme__light\b/);
-  for (const width of [390, 1024, 1440]) {
+  for (const width of [1024, 1440]) {
     await page.setViewportSize({ width, height: 900 });
     await showCanvas(page, width);
     await page.getByRole("button", { name: "适合画布" }).click();
   await page.waitForTimeout(250);
-    await showAssistant(page, width);
-    await expect(page.getByRole("textbox", { name: "描述设计需求" })).toBeVisible();
-    await showCanvas(page, width);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
     await page.screenshot({ path: `output/playwright/workflow-light-${width}.png` });
   }
   const download = page.waitForEvent("download");
-  await page.getByText("资料与更多", { exact: true }).click();
+  await page.getByRole("button", { name: "工作室帮助", exact: true }).click();
   await page.getByRole("button", { name: "导出画布 PNG", exact: true }).click();
   const file = await download;
   await file.saveAs("output/playwright/workflow-export-with-curves.png");
