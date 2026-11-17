@@ -25,7 +25,7 @@ test("已有款式同时展示作品与资料，离开保护保留修改", async
   await expect(page.getByLabel("款式名称", { exact: true })).toHaveValue(
     "长袖口修改草稿",
   );
-  await page.getByRole("tab", { name: "技术包", exact: true }).click();
+  await page.getByRole("button", { name: "返回画布", exact: true }).click();
   await expect(
     page.getByRole("dialog", { name: "保留未保存的修改" }),
   ).toBeVisible();
@@ -176,9 +176,11 @@ for (const width of [1738, 1440, 1280, 1199, 1024, 390, 320, 720])
         await expect(
           page.getByRole("button", { name: "展开工作区目录", exact: true }),
         ).toBeVisible();
+      else if (tab === "planning")
+        await expect(page.getByRole("tab", { name: "款式规划", exact: true })).toBeVisible();
       else
         await expect(
-          page.getByRole("tab", { name: "品牌资料", exact: true }),
+          page.getByRole("button", { name: "返回画布", exact: true }),
         ).toBeVisible();
     }
   });
