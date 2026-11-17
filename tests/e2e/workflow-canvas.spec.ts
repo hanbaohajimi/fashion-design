@@ -3558,6 +3558,12 @@ for (const crossTab of [false, true]) {
       : route.fulfill({ status: 401, json: { message: "未登录" } }));
     const install = async (target: Page) => {
       const mocked = await mockWorkflow(target);
+      await target.addInitScript((projectId) => {
+        for (const accountId of ["a", "b"]) {
+          const key = `fashion:workspace-split:${accountId}:${projectId}`;
+          if (localStorage.getItem(key) === null) localStorage.setItem(key, JSON.stringify({ width: 384, open: true }));
+        }
+      }, PROJECT_ID);
       const account = (cookie: string) => cookie.includes("review-account=b") ? "b" : cookie.includes("review-account=a") ? "a" : null;
       await target.route("**/api/me", (route) => {
         const id = account(route.request().headers().cookie ?? "");
@@ -3586,8 +3592,9 @@ for (const crossTab of [false, true]) {
       await expect(other.getByText("B 的设计需求", { exact: true })).toBeVisible();
     } else {
       await page.route("**/api/projects?*", (route) => route.fulfill({ json: { items: [], total: 0, page: 1, hasMore: false } }));
-      await page.getByRole("navigation", { name: "工作区导航" }).getByRole("link", { name: "项目库", exact: true }).click();
-      await expect(page).toHaveURL("/");
+      await page.getByRole("button", { name: "项目菜单", exact: true }).click();
+      await page.getByRole("button", { name: "全部项目", exact: true }).click();
+      await expect(page).toHaveURL("/projects");
       await page.reload();
       await page.getByLabel("a@example.com", { exact: true }).click();
       await page.getByRole("button", { name: "退出登录", exact: true }).click();
@@ -3640,8 +3647,9 @@ test("未保存时前进也会等待保存，失败不破坏前进目标", async
   await page.route(`**/api/projects/${PROJECT_ID}/workflow`, (route) => route.request().method() === "PATCH" && fail
     ? route.fulfill({ status: 503, json: { message: "保存失败" } }) : route.fallback());
   await page.goto(`/${PROJECT_ID}`);
-  await page.getByRole("navigation", { name: "工作区导航" }).getByRole("link", { name: "项目库", exact: true }).click();
-  await expect(page).toHaveURL("/");
+  await page.getByRole("button", { name: "项目菜单", exact: true }).click();
+  await page.getByRole("button", { name: "全部项目", exact: true }).click();
+  await expect(page).toHaveURL("/projects");
   await page.goBack();
   await dragReviewBrief(page);
   await expect(page.locator("main[data-layout-pending-count]")).not.toHaveAttribute("data-layout-pending-count", "0");
@@ -3650,7 +3658,7 @@ test("未保存时前进也会等待保存，失败不破坏前进目标", async
   await expect(page).toHaveURL(new RegExp(PROJECT_ID));
   fail = false;
   await page.goForward();
-  await expect(page).toHaveURL("/");
+  await expect(page).toHaveURL("/projects");
 });
 
 test("仅用键盘完成添加、取消、打开详情和删除确认", async ({ page }) => {

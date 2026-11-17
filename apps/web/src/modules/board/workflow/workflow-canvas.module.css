@@ -330,7 +330,7 @@
 
 /* 给素材对话框与节点详情使用的类型标签（画布角落的 "设计轨迹" 标签已移除）。 */
 .overline {
-  color: var(--color-ink-tertiary);
+  color: var(--color-ink-secondary);
   font-size: var(--text-sm);
   font-weight: 600;
   letter-spacing: 0.16em;

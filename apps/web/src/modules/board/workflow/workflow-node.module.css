@@ -122,7 +122,7 @@
   display: flex;
   gap: 6px;
   overflow: hidden;
-  color: var(--color-ink-tertiary);
+  color: var(--color-ink-secondary);
   font-family: var(--font-mono);
   font-size: 12px;
   font-weight: 600;
