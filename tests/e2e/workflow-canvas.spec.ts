@@ -2461,20 +2461,21 @@ test("直接拖线、点击连线、键盘连接与断开可刷新恢复", async
   await expect.poll(() => mocked.getGraph().edges.length).toBe(12);
   await port(page, "brief", "output").click();
   await port(page, "evaluate", "input").click();
-  await expect(page.getByRole("status").filter({ hasText: "这类素材不能" })).toBeVisible();
-  expect(mocked.getGraph().edges.length).toBe(12);
+  await expect.poll(() => mocked.getGraph().edges.some((item) => item.sourceNodeId === "brief" && item.targetNodeId === "evaluate")).toBe(true);
+  expect(mocked.getGraph().edges.length).toBe(13);
   await port(page, "reference", "output").click();
   await page.keyboard.press("Escape");
   await expect(page.getByText("选择另一端的节点 · Esc 取消")).toHaveCount(0);
   await page.reload();
   await page.getByRole("button", { name: "适合画布" }).click();
   await page.waitForTimeout(250);
-  await expect(page.locator("[data-workflow-edge]")).toHaveCount(12);
+  await expect(page.locator("[data-workflow-edge]")).toHaveCount(13);
   expect(mocked.getExecuteCount()).toBe(0);
 });
 
 test("已运行工具改输入建立独立分支，系统结果来源保持只读", async ({ page }) => {
   const mocked = await mockWorkflow(page);
+  await seedOpenAssistant(page);
   const originalEdges = structuredClone(mocked.getGraph().edges);
   await page.goto(`/${PROJECT_ID}`);
   await page.getByRole("button", { name: "适合画布" }).click();
