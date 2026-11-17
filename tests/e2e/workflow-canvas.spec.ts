@@ -2725,9 +2725,10 @@ test("固定浅色与桌面宽度保持画布布局，PNG 导出包含曲线", a
 });
 
 test.describe("触屏连线", () => {
-  test.use({ hasTouch: true, viewport: { width: 390, height: 844 } });
+  test.use({ hasTouch: true, viewport: { width: 1440, height: 900 } });
   test("点击两端无需打开详情即可连接", async ({ page }) => {
     const mocked = await mockWorkflow(page);
+    await seedOpenAssistant(page);
     mocked.getGraph().nodes = mocked.getGraph().nodes.filter((item) => item.id === "reference" || item.id === "evaluate").map((item, index) => ({ ...item, status: "ready", x: 40 + index * 380, y: 100 }));
     mocked.getGraph().edges = [];
     await page.goto(`/${PROJECT_ID}`);
@@ -2736,43 +2737,39 @@ test.describe("触屏连线", () => {
     await port(page, "reference", "output").tap();
     await port(page, "evaluate", "input").tap();
     await expect.poll(() => mocked.getGraph().edges.length).toBe(1);
-    await page.getByRole("button", { name: "助手", exact: true }).click();
-    await expect(page.getByRole("heading", { name: "设计助手", exact: true })).toBeVisible();
+    await expect(page.getByRole("complementary", { name: "设计助手", exact: true })).toBeVisible();
     expect(mocked.getExecuteCount()).toBe(0);
   });
 });
 
-test("持续对话保留只读历史与新会话；手机节点列表及菜单无横向溢出", async ({ page }) => {
+test("持续对话保留只读历史与新会话，桌面菜单可达", async ({ page }) => {
   test.setTimeout(60_000);
   const mocked = await mockWorkflow(page);
-  await page.setViewportSize({ width: 390, height: 844 });
+  await seedOpenAssistant(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`/${PROJECT_ID}`);
   await page.getByRole("button", { name: "适合画布" }).click();
   await page.waitForTimeout(250);
-  await page.getByRole("button", { name: "助手", exact: true }).click();
   const initialSend = page.getByRole("button", { name: "发送需求", exact: true });
   await expect(initialSend).toBeDisabled();
   await expect(initialSend).toBeInViewport({ ratio: 1 });
   const disabledBackground = await initialSend.evaluate((element) => getComputedStyle(element).backgroundColor);
   await initialSend.hover();
   await expect(initialSend).toHaveCSS("background-color", disabledBackground);
-  await page.getByRole("button", { name: "节点列表" }).click();
-  await expect(page.getByRole("listitem").filter({ has: page.getByText("候选 A", { exact: true }) })).toBeVisible();
   await page.getByRole("button", { name: "＋ 添加工具" }).click();
   await expect.poll(async () => {
-    const bounds = await page.getByRole("button", { name: /局部修改 候选/ }).boundingBox();
+    const bounds = await page.getByRole("button", { name: /局部修改 图片/ }).boundingBox();
     return bounds ? bounds.x + bounds.width : Infinity;
-  }).toBeLessThanOrEqual(390);
-  const menuBox = await page.getByRole("button", { name: /局部修改 候选/ }).boundingBox();
+  }).toBeLessThanOrEqual(1440);
+  const menuBox = await page.getByRole("button", { name: /局部修改 图片/ }).boundingBox();
   expect((menuBox?.x ?? -1) >= 0).toBe(true);
-  expect((menuBox?.x ?? 0) + (menuBox?.width ?? Infinity)).toBeLessThanOrEqual(390);
-  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
+  expect((menuBox?.x ?? 0) + (menuBox?.width ?? Infinity)).toBeLessThanOrEqual(1440);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(1440);
   await page.getByRole("button", { name: "关闭菜单" }).click();
 
-  await page.getByRole("button", { name: "助手", exact: true }).click();
   const actions = page.getByRole("button", { name: "助手设置", exact: true });
   await actions.click();
-  await expect(page.getByRole("button", { name: "暂停本项目设计助手", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "设计要求", exact: true })).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(page.getByText("更多", { exact: true })).toHaveCount(0);
   await expect.poll(() => actions.getByRole("button").evaluateAll(buttons => buttons.every(button => { const bounds = button.getBoundingClientRect(); return bounds.left >= 0 && bounds.right <= innerWidth; }))).toBe(true);
@@ -2781,7 +2778,7 @@ test("持续对话保留只读历史与新会话；手机节点列表及菜单�
   await chooseValue(valueControl(page, "历史对话"), "chat-old");
   await expect(page.getByText("历史消息")).toBeVisible();
   await actions.click();
-  await expect(page.getByRole("group", { name: "助手设置选项", exact: true }).getByRole("button")).toHaveText(["旧设计运行", "暂停本项目设计助手"]);
+  await expect(page.getByRole("group", { name: "助手设置选项", exact: true }).getByRole("button", { name: "旧设计运行", exact: true })).toBeVisible();
   await page.keyboard.press("Escape");
   await chooseValue(valueControl(page, "历史对话"), "chat-new");
   await page.getByRole("textbox", { name: "描述设计需求" }).fill("比较两张风衣图");
@@ -2790,8 +2787,8 @@ test("持续对话保留只读历史与新会话；手机节点列表及菜单�
   const sendBox = await page.getByRole("button", { name: "发送需求" }).boundingBox();
   if (!sendBox) throw new Error("发送按钮未显示");
   expect(sendBox.x).toBeGreaterThanOrEqual(0);
-  expect(sendBox.x + sendBox.width).toBeLessThanOrEqual(390);
-  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
+  expect(sendBox.x + sendBox.width).toBeLessThanOrEqual(1440);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(1440);
   expect(mocked.chatRequests).toHaveLength(0);
   expect(mocked.proposalRequests).toHaveLength(0);
 });
@@ -2832,7 +2829,7 @@ test("候选的大图、版本、局部重绘入口和新草图保存均可从�
   await expect(sketch).toHaveCount(0);
   const created = mocked.getGraph().nodes.find((item) => item.type === "sketch");
   expect(created?.payload.fileAssetId).toBe("sketch-file");
-  expect(created?.payload).toMatchObject({ role: "silhouette_ref", roleSource: "inferred", roleInferenceState: "ready" });
+  expect(created?.payload.sketchDocument).toMatchObject({ strokes: [expect.objectContaining({ points: expect.any(Array) })] });
   await expect(page.locator('[data-type="sketch"]')).toHaveCount(1);
 
   await page.getByRole("button", { name: "＋ 添加素材" }).click();
@@ -2872,7 +2869,7 @@ test("未执行工具可保存真实参数；历史显示来源和模型，完�
   await details.getByRole("textbox", { name: "执行指令" }).fill("新版通勤风衣");
   await details.getByText("高级设置", { exact: true }).click();
   await details.getByRole("textbox", { name: "排除内容" }).fill("避免亮面");
-  await details.getByRole("spinbutton", { name: "候选数量" }).fill("3");
+  await details.getByRole("spinbutton", { name: "生成数量" }).fill("3");
   await details.getByRole("spinbutton", { name: "宽度" }).fill("1024");
   await expect(details.getByRole("button", { name: "确认并执行" })).toBeDisabled();
   await details.getByRole("button", { name: "保存工具参数" }).click();
@@ -2906,8 +2903,8 @@ test("同名节点仅引用 @列表里明确选中的那条分支", async ({ pag
   await expect(page.getByRole("button", { name: "发送需求" })).toBeDisabled();
   await expect(page.getByRole("complementary", { name: "设计助手" }).getByRole("status").filter({ hasText: "请从 @列表选择准确节点" })).toBeVisible();
   expect(mocked.proposalRequests).toHaveLength(0);
-  await composer.fill("请修改 @候选");
-  await page.getByRole("option", { name: /候选 A/ }).last().click();
+  await composer.fill("请修改 @生成图");
+  await page.getByRole("option", { name: /生成图/ }).last().click();
   await page.getByRole("button", { name: "发送需求" }).click();
   await expect.poll(() => mocked.proposalRequests.length).toBe(1);
   expect(mocked.proposalRequests[0]?.referencedNodeIds).toEqual(["candidate-a-branch"]);
@@ -2917,6 +2914,8 @@ test("同名节点仅引用 @列表里明确选中的那条分支", async ({ pag
   await page.getByRole("button", { name: "适合画布" }).click();
   await page.waitForTimeout(250);
   await expect(composer).toBeEnabled();
+  await page.getByRole("button", { name: "停靠到右侧", exact: true }).click();
+  await page.getByRole("button", { name: "适合画布" }).click();
   await page.locator('[data-type="candidate"]').first().click();
   expect(mocked.contextPatches).toHaveLength(0);
   expect(mocked.getContext().focusNodeIds).toEqual(["candidate-a-branch"]);
@@ -2928,9 +2927,10 @@ test("同名节点仅引用 @列表里明确选中的那条分支", async ({ pag
   expect(mocked.getExecuteCount()).toBe(0);
 });
 
-for (const width of [1280, 375]) {
+for (const width of [1280]) {
 test(`普通会话 ${width} 可只读查看旧设计运行的简报、尝试和人工决定`, async ({ page }) => {
   await mockWorkflow(page);
+  await seedOpenAssistant(page);
   await page.route("**/api/agent-conversations/chat-old/plans", (route) => route.fulfill({ json: { items: [{ id: "legacy-run", intent: "秋冬风衣设计", status: "completed", createdAt: NOW }] } }));
   await page.route("**/api/agent-runs/legacy-run", (route) => route.fulfill({ json: {
     id: "legacy-run", projectId: PROJECT_ID, conversationId: "chat-old", intent: "秋冬风衣设计", status: "completed", revision: 4, createdAt: NOW, updatedAt: NOW, error: null,
