@@ -120,11 +120,12 @@ test("森织登录：标识加载失败仍可发送链接", async ({ page }) => 
 
 test("森织品牌：图标、导航、确认页与公开分享", async ({ page }) => {
   await page.goto("/");
-  await expect(page).toHaveTitle("森织设计工作室");
+  await expect(page).toHaveTitle("从灵感到交付的服装设计工作室");
   await expect(page.locator('meta[name="application-name"]')).toHaveAttribute(
     "content",
     "森织设计工作室",
   );
+  await page.goto("/projects");
   const home = page.getByRole("link", { name: "森织 设计工作室 首页" });
   await expect(home).toHaveAttribute("href", "/");
   await expect(home.locator("img")).toHaveAttribute("alt", "");
@@ -157,9 +158,7 @@ test("森织品牌：图标、导航、确认页与公开分享", async ({ page 
       .getByRole("link", { name: "面料库" }),
   ).toHaveAttribute("aria-current", "page");
   await home.click();
-  await expect(
-    page.getByRole("heading", { name: "项目库", exact: true }),
-  ).toBeVisible();
+  await expect(page).toHaveURL(/\/$/u);
   await page.goto("/auth/confirm");
   await expect(
     page.getByText("森织 设计工作室", { exact: true }),
@@ -172,7 +171,7 @@ test("森织品牌：图标、导航、确认页与公开分享", async ({ page 
   );
   await page.goto("/share/forest-brand");
   await expect(
-    page.getByText("森织 分享的设计", { exact: true }),
+    page.getByText("森织 · 只读分享", { exact: true }),
   ).toBeVisible();
   await expect(page.getByRole("img", { name: "分享的设计图片" })).toBeVisible();
   await expect(page.getByRole("link", { name: "进入工作室" })).toHaveAttribute(

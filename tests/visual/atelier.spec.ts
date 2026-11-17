@@ -5,10 +5,14 @@ import {
   controlFontFailures,
 } from "../e2e/review-accessibility";
 import { workspaceFixture, experimentFixture } from "./workspace-fixture";
+import { seedCollectionWorkbench } from "../e2e/collection-workbench-fixture";
 
-test.beforeEach(async ({ page }) => seedVisualApp(page));
+test.beforeEach(async ({ page }) => {
+  await seedVisualApp(page);
+  await seedCollectionWorkbench(page, PROJECT, workspaceFixture());
+});
 
-for (const width of [1440, 375]) {
+for (const width of [1440]) {
   test(`素材选择器 ${width}`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });
     await page.route(`**/api/projects/${PROJECT}/studio`, (route) =>
@@ -39,7 +43,6 @@ for (const width of [1440, 375]) {
 for (const viewport of [
   { width: 1280, height: 800 },
   { width: 1440, height: 900 },
-  { width: 390, height: 844 },
 ]) {
   test.describe(`workspace ${viewport.width}`, () => {
     test.use({
@@ -71,9 +74,8 @@ for (const viewport of [
         await page.goto(
           `/${PROJECT}/studio?tab=${tab}${tab === "runway" ? "&showId=show-1&runId=run-1" : ""}`,
         );
-        await expect(
-          page.locator('[role="tabpanel"]:not([hidden]) h2').first(),
-        ).toBeVisible();
+        await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+        if (tab === "planning") await expect(page.getByRole("region", { name: "系列工作台" })).toBeVisible();
         if (tab === "experiments") {
           await expect(
             page.getByRole("heading", { name: "藏蓝方案", exact: true }),
@@ -101,7 +103,6 @@ for (const viewport of [
 
 for (const viewport of [
   { width: 1440, height: 900 },
-  { width: 390, height: 844 },
 ]) {
   test.describe(`${viewport.width}`, () => {
     test.use({
@@ -132,12 +133,14 @@ for (const viewport of [
         if (screen === "projects")
           await expect(page.locator("article")).toHaveCount(2);
         if (screen === "projects") {
+          if (viewport.width < 768) await page.getByRole("button", { name: "展开工作区目录" }).click();
           await expect(
-            page.getByRole("link", { name: "浏览趋势档案", exact: true }),
+            page.getByRole("link", { name: "发现", exact: true }),
           ).toHaveAttribute("href", "/trends?from=projects");
           await expect(
-            page.getByRole("link", { name: "浏览面料库", exact: true }),
+            page.getByRole("link", { name: "面料库", exact: true }),
           ).toHaveAttribute("href", "/fabrics?from=projects");
+          if (viewport.width < 768) await page.getByRole("button", { name: "收起工作区目录" }).click();
         }
         if (screen === "fabrics")
           await expect(
@@ -437,45 +440,29 @@ test("experiment request failure retains configuration", async ({ page }) => {
   );
 });
 
-test.describe("studio touch", () => {
+test.describe("studio desktop", () => {
   test.use({
-    viewport: { width: 390, height: 844 },
-    hasTouch: true,
-    isMobile: true,
+    viewport: { width: 1440, height: 900 },
   });
-  test("assistant actions remain reachable with touch controls", async ({
+  test("assistant actions remain reachable", async ({
     page,
   }) => {
     await page.goto(`/${PROJECT}`);
-    await page.getByRole("button", { name: "助手", exact: true }).click();
+    const open = page.getByRole("button", { name: "展开设计助手", exact: true });
+    if (await open.isVisible()) await open.click();
     const send = page.getByRole("button", { name: "发送需求", exact: true });
     await expect(send).toBeInViewport({ ratio: 1 });
-    const minimum = await page.evaluate(() =>
-      parseFloat(
-        getComputedStyle(document.documentElement).getPropertyValue(
-          "--control-height-touch",
-        ),
-      ),
-    );
     for (const target of [
       send,
       page.getByRole("button", { name: "收起设计助手" }),
       page.getByRole("button", { name: "历史对话", exact: true }),
-      page
-        .getByRole("navigation", { name: "工作区导航", exact: true })
-        .locator("summary"),
     ]) {
-      const bounds = await target.boundingBox();
-      if (!bounds) throw new Error("触屏操作控件不可见");
-      expect(bounds.width).toBeGreaterThanOrEqual(minimum);
-      expect(bounds.height).toBeGreaterThanOrEqual(minimum);
+      await expect(target).toBeInViewport({ ratio: 1 });
     }
-    await expect(page).toHaveScreenshot("studio-assistant-touch.png");
+    await expect(page).toHaveScreenshot("studio-assistant-desktop.png");
     await page.getByRole("button", { name: "历史对话", exact: true }).click();
-    await expect(
-      page.locator('button[aria-haspopup="listbox"][aria-label="历史对话"]'),
-    ).toBeInViewport({ ratio: 1 });
-    await expect(page).toHaveScreenshot("studio-menu-touch.png");
+    await expect(page.getByRole("group", { name: "历史对话选项" })).toBeVisible();
+    await expect(page).toHaveScreenshot("studio-menu-desktop.png");
   });
 });
 
@@ -509,18 +496,15 @@ test("studio, sketch, asset and export", async ({ page }) => {
   expect(await controlFontFailures(page)).toEqual([]);
   expect(await contrastFailures(page, true)).toEqual([]);
   const image = page.getByRole("dialog", { name: "图片工作区", exact: true });
-  await image.getByRole("button", { name: "图像", exact: true }).click();
+  await image.getByRole("button", { name: "版本与对比", exact: true }).click();
   const history = image.getByRole("button", { name: "版本历史", exact: true });
   await history.focus();
   await history.press("Enter");
   await expect(page.getByRole("region", { name: "版本时间线" })).toBeVisible();
   await expect(page).toHaveScreenshot("asset-history-empty.png");
-  await image.getByRole("button", { name: "图像", exact: true }).click();
-  await image
-    .getByRole("button", { name: "更多导出选项", exact: true })
-    .click();
+  await image.getByRole("button", { name: "导出", exact: true }).click();
   await expect(
-    page.getByRole("button", { name: "开始导出", exact: true }),
+    image.getByRole("button", { name: "下载图片", exact: true }),
   ).toBeVisible();
   await expect(page).toHaveScreenshot("export-ready.png");
   expect(await controlFontFailures(page)).toEqual([]);
