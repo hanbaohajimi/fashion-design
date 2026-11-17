@@ -147,7 +147,7 @@ test("主工作流从版本历史恢复后落新分支；图接入失败刷新�
   await page.goto(`/${PROJECT_ID}`);
   await page.getByRole("button", { name: "适合画布" }).click();
   await page.locator('[data-type="candidate"]').filter({ hasText: "当前夹克" }).dblclick();
-  await expect(page.getByRole("button", { name: "来源与设计决策", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "来源与设计决策", exact: true })).toBeVisible();
   expect(decisions).toHaveLength(0);
   let workspace = page.getByRole("dialog", { name: "图片工作区", exact: true });
   await workspace.getByRole("button", { name: /版本与对比/u }).click();
