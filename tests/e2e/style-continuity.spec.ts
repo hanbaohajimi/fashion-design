@@ -184,7 +184,9 @@ test("离开后的保存响应更新项目资料，保留当前编辑对象、�
   const release = state.delayNextStyleResponse();
   await page.getByRole("button", { name: "保存修订", exact: true }).click();
   await expect.poll(() => state.styleRequests.length).toBe(1);
-  await page.getByRole("tab", { name: "技术包", exact: true }).click();
+  await page.getByRole("button", { name: "项目菜单", exact: true }).click();
+  await page.getByRole("button", { name: "创作进展", exact: true }).click();
+  await page.getByRole("navigation", { name: "工作室资料接续" }).getByRole("button", { name: /技术包/ }).click();
   await page.getByRole("button", { name: "丢弃并离开", exact: true }).click();
   await page.getByLabel("技术包名称", { exact: true }).fill("新页面的技术包草稿");
   const response = page.waitForResponse(result => result.url().endsWith("/studio/styles/style-1") && result.request().method() === "PATCH");
@@ -192,7 +194,9 @@ test("离开后的保存响应更新项目资料，保留当前编辑对象、�
   await response;
   await expect(page.getByLabel("技术包名称", { exact: true })).toHaveValue("新页面的技术包草稿");
   await expect(page).toHaveURL(/tab=tech&styleRevisionId=style-r1/);
-  await page.getByRole("tab", { name: "商品展示", exact: true }).click();
+  await page.getByRole("button", { name: "项目菜单", exact: true }).click();
+  await page.getByRole("button", { name: "创作进展", exact: true }).click();
+  await page.getByRole("navigation", { name: "工作室资料接续" }).getByRole("button", { name: /商品展示/ }).click();
   await expect(page.getByRole("dialog", { name: "保留未保存的修改" })).toBeVisible();
   await page.getByRole("button", { name: "继续编辑", exact: true }).click();
   expect(state.styleRequests).toHaveLength(1);

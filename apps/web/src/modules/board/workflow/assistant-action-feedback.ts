@@ -258,7 +258,7 @@ export function canvasActionFeedback(
         ? { error: options.error }
         : {}),
     block,
-    ...(state === "succeeded" && ["move_objects", "resize_objects", "align_objects", "distribute_objects", "group_objects", "ungroup_objects", "reorder_objects"].includes(action.type) ? { compact: true } : {}),
+    ...((state === "pending" || state === "succeeded") && ["move_objects", "resize_objects", "align_objects", "distribute_objects", "group_objects", "ungroup_objects", "reorder_objects"].includes(action.type) ? { compact: true } : {}),
   };
 }
 

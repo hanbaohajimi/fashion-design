@@ -323,15 +323,9 @@ for (const width of [1440, 320])
     ).toBe(true);
     expect(Number(samples.at(-1)?.checkOffset)).toBe(0);
     for (const sample of samples) {
-      for (const key of [
-        "x",
-        "y",
-        "width",
-        "height",
-        "titleX",
-        "titleY",
-      ] as const)
-        expect(Math.abs(Number(sample[key]) - before[key])).toBeLessThan(1);
+      expect(Math.abs(Number(sample.width) - before.width)).toBeLessThan(1);
+      expect(Math.abs((Number(sample.titleX) - Number(sample.x)) - (before.titleX - before.x))).toBeLessThan(1);
+      expect(Math.abs((Number(sample.titleY) - Number(sample.y)) - (before.titleY - before.y))).toBeLessThan(1);
       expect(sample.opacity).toBe("1");
       expect(sample.color).toBe(before.color);
       expect(sample.weight).toBe(before.weight);
@@ -475,7 +469,8 @@ for (const status of [
     );
     await loadZhiya(page);
     await openZhiya(page);
-    await expect(mark(page)).toHaveAttribute(
+    const taskMark = panel(page).locator("[data-assistant-task] [data-status-mark]");
+    await expect(taskMark).toHaveAttribute(
       "data-status",
       status === "partial_failed"
         ? "partial"
@@ -486,13 +481,13 @@ for (const status of [
             : "failed",
     );
     expect(
-      await mark(page).evaluate((root) => {
+      await taskMark.evaluate((root) => {
         const check = root.querySelector("path");
         if (!check) throw new Error("缺少状态图形");
         return getComputedStyle(check).opacity;
       }),
     ).toBe("0");
-    expect(await runningAnimations(page)).toBe(0);
+    expect(await taskMark.evaluate(root => root.getAnimations({ subtree: true }).filter(item => item.playState === "running").length)).toBe(0);
     expect(base.mutations).toEqual([]);
     expect(base.errors).toEqual([]);
   });

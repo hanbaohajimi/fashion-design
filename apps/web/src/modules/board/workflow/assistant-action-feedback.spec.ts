@@ -132,6 +132,7 @@ describe("面向设计师的真实动作反馈", () => {
       });
       expect(model.state).toBe("pending");
       expect(model.title).toBe("正在对齐 3 张参考图");
+      expect(model.compact).toBe(true);
       expect(model.note).toBeUndefined();
     },
   );
