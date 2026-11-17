@@ -51,7 +51,7 @@
     "braces": "3.0.3",
     "dotenv": "^17.4.2",
     "eslint": "^9.39.3",
-    "eslint-config-next": "16.4.1",
+    "eslint-config-next": "16.4.5",
     "globals": "^16.5.0",
     "prettier": "^3.9.6",
     "supabase": "2.76.15",
