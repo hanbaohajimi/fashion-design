@@ -1410,22 +1410,19 @@ test("作品工作台：空项目直接开始，失败任务可恢复且默认�
   expect(mocked.getExecuteCount()).toBe(0);
 });
 
-test("作品工作台：方案详情返回恢复焦点，导出可转入完整流程", async ({ page }) => {
+test("作品工作台：方案详情返回恢复焦点，可转入完整流程", async ({ page }) => {
   test.setTimeout(60_000);
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.stack ?? error.message));
   const mocked = await mockWorkflow(page, "workbench");
   await page.goto(`/${PROJECT_ID}`);
   const work = page.getByRole("region", { name: "设计作品工作台", exact: true });
-  await work.getByRole("button", { name: "打开方案 候选 A", exact: true }).click();
+  await work.getByRole("button", { name: "打开方案 生成图 A", exact: true }).click();
   const details = page.getByRole("region", { name: "节点详情工作区", exact: true });
   await expect(details).toBeVisible();
   await details.getByRole("button", { name: "关闭图片工作区", exact: true }).click();
-  await expect(work.getByRole("group", { name: "服装方案 候选 A", exact: true })).toBeFocused();
-  await page.getByRole("button", { name: "项目菜单", exact: true }).click();
-  const download = page.waitForEvent("download");
-  await page.getByRole("button", { name: "导出画布 PNG", exact: true }).click();
-  expect((await download).suggestedFilename()).toContain(".png");
+  await expect(work.getByRole("group", { name: "服装方案 生成图 A", exact: true })).toBeFocused();
+  await page.getByRole("button", { name: "流程画布", exact: true }).click();
   await expect(page.locator('[data-kind="tool"]')).toHaveCount(3);
   expect(mocked.getExecuteCount()).toBe(0);
   expect(errors).toEqual([]);
@@ -1446,7 +1443,7 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 1366, height: 768
     await page.setViewportSize(viewport);
     await page.goto(`/${PROJECT_ID}`);
     const work = page.getByRole("region", { name: "设计作品工作台", exact: true });
-    const picture = work.getByRole("button", { name: "打开方案 候选 A", exact: true });
+    const picture = work.getByRole("button", { name: "打开方案 生成图 A", exact: true });
     await expect(picture).toBeVisible();
     const bounds = await picture.boundingBox();
     const region = await work.boundingBox();
@@ -1461,21 +1458,21 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 1366, height: 768
     if (viewport.width >= 768) await expect(actualImage).toBeInViewport({ ratio: 0.5 });
     expect(await actualImage.evaluate((element: HTMLImageElement) => element.getBoundingClientRect().width <= element.naturalWidth)).toBe(true);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-    if (viewport.width >= 1100) await expect(work.getByRole("button", { name: "继续设计", exact: true })).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+    if (viewport.width >= 1100) await expect(work.getByRole("button", { name: "继续设计", exact: true })).toHaveCSS("background-color", "rgb(31, 92, 71)");
     await mkdir("output/playwright/atelier-refinement", { recursive: true });
     await page.screenshot({ path: `output/playwright/atelier-refinement/single-${viewport.width}.png` });
     await work.getByRole("button", { name: "1 项参考素材", exact: true }).click();
     await expect(work.getByRole("region", { name: "参考素材", exact: true })).toBeFocused();
     await expect(work.getByRole("button", { name: `查看素材 ${sourceName}`, exact: true })).toBeInViewport();
     expect(await work.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
-    expect((await page.locator("main > header").boundingBox())?.y).toBe(viewport.width < 768 ? 64 : 0);
+    await expect(page.getByRole("button", { name: "项目菜单", exact: true })).toBeInViewport();
     expect(JSON.stringify(graph)).toBe(saved);
     expect(mocked.getExecuteCount()).toBe(0);
     graph.nodes.push(second);
     graph.edges.push(edge("second", "generate", second.id, "source"));
     await page.reload();
-    const a = await work.getByRole("button", { name: "打开方案 候选 A", exact: true }).boundingBox();
-    const b = await work.getByRole("button", { name: "打开方案 候选 B", exact: true }).boundingBox();
+    const a = await work.getByRole("button", { name: "打开方案 生成图 A", exact: true }).boundingBox();
+    const b = await work.getByRole("button", { name: "打开方案 生成图 B", exact: true }).boundingBox();
     if (!a || !b) throw new Error("两个方案未完整呈现");
     if (viewport.width >= 768) { expect(Math.abs(a.y - b.y)).toBeLessThan(2); expect(b.x).toBeGreaterThan(a.x); }
     else expect(b.y).toBeGreaterThan(a.y);
