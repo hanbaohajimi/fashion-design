@@ -104,7 +104,7 @@ export function AssistantReferencePicker({
       label="添加引用"
       onClose={onClose}
       onAfterClose={onAfterClose}
-      returnFocusSelector="[data-assistant-reference-trigger]"
+      returnFocusSelector="#workflow-design-assistant [data-guide='workspace-reference']"
       className={ui.referencePicker}
     >
       <header className={ui.drawerHeader}>

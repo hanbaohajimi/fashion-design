@@ -170,24 +170,32 @@ test("助手入口：等待回复可准备下一条草稿，失效引用阻止�
 for (const width of [1440, 1280, 390, 320]) {
   test(`助手入口：${width}px 入口、引用选择与焦点可达`, async ({ page }) => {
     await mockWorkflow(page, "workbench");
+    await seedOpenAssistant(page);
     await page.setViewportSize({ width, height: 900 });
     await page.goto(`/${PROJECT_ID}`);
-    if (width < 768) await page.getByRole("button", { name: "助手", exact: true }).click();
+    if (width < 768) {
+      const prompt = page.getByRole("textbox", { name: "描述设计需求" });
+      const openAssistant = page.getByRole("button", { name: "展开设计助手", exact: true });
+      await expect(prompt.or(openAssistant).first()).toBeVisible();
+      if (await openAssistant.isVisible()) await openAssistant.click();
+    }
     const input = page.getByRole("textbox", { name: "描述设计需求" });
     await expect(input).toBeVisible();
     if (width < 768) {
       expect(await input.evaluate((element) => parseFloat(getComputedStyle(element).fontSize))).toBeGreaterThanOrEqual(16);
     }
-    for (const name of ["历史对话", "新建对话", "设计要求", "添加引用", "发送需求"]) {
+    for (const name of ["历史对话", "新建对话", "助手设置", "添加素材", "发送需求"]) {
       await expect(page.getByRole("button", { name, exact: true })).toBeInViewport({ ratio: 1 });
       if (width < 768) {
         const bounds = await page.getByRole("button", { name, exact: true }).boundingBox();
         expect(bounds?.height, `${name}的触控高度`).toBeGreaterThanOrEqual(44);
       }
     }
+    await page.getByRole("button", { name: "助手设置", exact: true }).click();
     await page.getByRole("button", { name: "设计要求", exact: true }).click();
     await page.keyboard.press("Escape");
     await expect(page.getByRole("button", { name: "助手设置", exact: true })).toBeFocused();
+    await page.getByRole("button", { name: "添加素材", exact: true }).click();
     await page.getByRole("button", { name: "添加引用", exact: true }).click();
     await expect(page.getByRole("textbox", { name: "搜索项目对象" })).toBeFocused();
     await expect(page.getByRole("dialog", { name: "添加引用", exact: true })).toHaveAttribute("data-phase", "open");
@@ -202,7 +210,7 @@ for (const width of [1440, 1280, 390, 320]) {
     await mkdir("output/playwright/assistant", { recursive: true });
     await page.screenshot({ path: `output/playwright/assistant/reference-picker-${width}.png` });
     await page.keyboard.press("Escape");
-    await expect(page.getByRole("button", { name: "添加引用", exact: true })).toBeFocused();
+    await expect(page.getByRole("button", { name: "添加素材", exact: true })).toBeFocused();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     expect(await controlFontFailures(page, page.getByRole("complementary", { name: "设计助手", exact: true }))).toEqual([]);
     expect(await contrastFailures(page, false, 'aside[aria-label="设计助手"]')).toEqual([]);

@@ -1,6 +1,6 @@
 .root { width: 100%; }
 .options { display: flex; flex-direction: column; gap: 4px; }
-.options button { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 44px; padding: 10px 8px; border: 0; border-radius: 8px; color: var(--color-ink-secondary); background: transparent; text-align: left; font: inherit; cursor: pointer; }
+.options button { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 44px; padding: 10px 8px; border: 0; border-radius: 8px; color: var(--color-ink-secondary); background: transparent; text-align: left; font: inherit; font-size: 14px; cursor: pointer; }
 .options button:enabled:hover { background: var(--color-action-subtle); color: var(--color-ink); }
 .options button:focus-visible { outline: 2px solid var(--color-focus-ring); outline-offset: 1px; }
 .options button:disabled { opacity: 0.55; cursor: default; }
