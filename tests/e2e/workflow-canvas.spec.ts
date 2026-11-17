@@ -1030,11 +1030,13 @@ test.describe("助手和上传的真实状态动效", () => {
 
 test("工作室详情草稿在对话切换和同步后保留；侧栏支持键盘调整", async ({ page }) => {
   const mocked = await mockWorkflow(page);
+  await seedOpenAssistant(page);
   const tool = mocked.getGraph().nodes.find((node) => node.id === "generate");
   if (!tool) throw new Error("测试图缺少生成工具");
   tool.status = "ready";
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(`/${PROJECT_ID}`);
+  await page.getByRole("button", { name: "停靠到右侧", exact: true }).click();
   await page.getByRole("button", { name: "适合画布" }).click();
   await page.locator('[data-type="generate_design"]').first().click();
   await page.getByRole("button", { name: "详情", exact: true }).click();
@@ -1073,11 +1075,12 @@ test("统一工作区在桌面、抽屉及手机视图保持操作可达", async
     await page.getByRole("button", { name: "适合画布" }).click();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     if (viewport.width >= 1100) {
-      await expect(page.locator("main > header")).toHaveCSS("height", "56px");
+      await expect(page.getByRole("button", { name: "项目菜单", exact: true })).toBeVisible();
       const bounds = await page.getByRole("region", { name: "设计工作流画布" }).boundingBox();
       expect(bounds?.width ?? 0).toBeGreaterThanOrEqual(640);
     }
     await page.screenshot({ path: `output/playwright/atelier/studio-${viewport.width}.png` });
+    await page.getByRole("button", { name: "设计工作台", exact: true }).click();
     await showAssistant(page, viewport.width);
     await expect(page.getByRole("textbox", { name: "描述设计需求" })).toBeVisible();
     await expect(page.getByRole("button", { name: "发送需求", exact: true })).toBeInViewport({ ratio: 1 });
@@ -1096,12 +1099,15 @@ test("统一工作区在桌面、抽屉及手机视图保持操作可达", async
     await page.screenshot({ path: `output/playwright/atelier/assistant-${viewport.width}.png` });
     const actions = page.getByRole("button", { name: "助手设置", exact: true });
     await actions.click();
-    const actionBounds = await page.getByRole("button", { name: "暂停本项目设计助手", exact: true }).boundingBox();
+    const actionBounds = await page.getByRole("button", { name: "设计要求", exact: true }).boundingBox();
     if (!actionBounds) throw new Error("协作操作菜单未显示");
     expect(actionBounds.y).toBeGreaterThanOrEqual(0);
     expect(actionBounds.y + actionBounds.height).toBeLessThanOrEqual(viewport.height);
     await actions.press("Escape");
     await expect(actions).toBeFocused();
+    if (viewport.width < 768) await page.getByRole("button", { name: "返回画布", exact: true }).click();
+    else await page.getByRole("button", { name: "收起设计助手", exact: true }).click();
+    await page.getByRole("button", { name: "流程画布", exact: true }).click();
   }
 });
 
