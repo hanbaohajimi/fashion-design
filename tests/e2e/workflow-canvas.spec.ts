@@ -259,6 +259,7 @@ test("显式引用发送失败后保留草稿，清除引用和切换会话保�
 
 test("发送成功后讨论对象读取失败时不沿用旧焦点，恢复读取后再继续发送", async ({ page }) => {
   const mocked = await mockWorkflow(page);
+  await seedOpenAssistant(page);
   mocked.getContext().focusNodeIds = ["candidate-a"];
   let blockContext = false;
   await page.route("**/api/agent-conversations/*/context", (route) => blockContext
@@ -266,17 +267,26 @@ test("发送成功后讨论对象读取失败时不沿用旧焦点，恢复读�
   await page.goto(`/${PROJECT_ID}`);
   const input = page.getByRole("textbox", { name: "描述设计需求" });
   const discussion = page.getByLabel("正在讨论", { exact: true });
-  await expect(discussion).toContainText("候选 A");
-  await input.fill("比较两张风衣图 @候选 B");
+  await expect(discussion).toContainText("生成图 A");
+  await discussion.getByRole("button", { name: "生成图 A", exact: true }).focus();
+  await page.keyboard.press("Delete");
+  await page.getByRole("button", { name: "添加素材", exact: true }).click();
+  await page.getByRole("button", { name: "添加引用", exact: true }).click();
+  const picker = page.getByRole("dialog", { name: "添加引用", exact: true });
+  await picker.getByRole("checkbox", { name: /生成图 B/ }).check();
+  await picker.getByRole("button", { name: "使用所选引用", exact: true }).click();
+  await expect(picker).toBeHidden();
+  await input.fill("比较两张风衣图");
+  await expect(page.getByRole("button", { name: "发送需求", exact: true })).toBeEnabled();
   blockContext = true;
   await page.getByRole("button", { name: "发送需求" }).click();
-  await expect(discussion).toContainText("讨论对象读取失败");
-  await expect(discussion).not.toContainText("候选 A");
+  await expect(page.getByRole("alert").filter({ hasText: "讨论对象读取" })).toBeVisible();
+  await expect(discussion).not.toContainText("生成图 A");
   await input.fill("比较两张风衣图，继续");
   await expect(page.getByRole("button", { name: "发送需求" })).toBeDisabled();
   blockContext = false;
   await page.getByRole("button", { name: "重新读取", exact: true }).click();
-  await expect(discussion).toContainText("候选 B");
+  await expect(discussion).toContainText("生成图 B");
   await page.getByRole("button", { name: "发送需求" }).click();
   await expect.poll(() => mocked.workflowRequests.length).toBe(2);
   expect(mocked.workflowRequests[1]).toMatchObject({ referencedNodeIds: [], focusNodeIds: ["candidate-b"] });
@@ -332,6 +342,7 @@ for (const width of [1440, 390]) {
 for (const width of [1440, 1280, 889, 390]) {
   test(`聚焦工作区 ${width}：工具轻量化、详情独立、返回保留草稿`, async ({ page }) => {
     const mocked = await mockWorkflow(page);
+    await seedOpenAssistant(page);
     const tool = mocked.getGraph().nodes.find((entry) => entry.id === "generate");
     if (!tool) throw new Error("缺少生成工具");
     tool.status = "ready";
@@ -385,16 +396,20 @@ test("聚焦工作区：候选重绘与变体分别保留，手机助手切换�
   await workspace.getByRole("textbox", { name: "局部重绘说明" }).fill("调整袖口宽度");
   await workspace.getByRole("button", { name: "标记中央区域" }).click();
   await expect(workspace.getByRole("button", { name: "撤销一笔" })).toBeEnabled();
+  await workspace.getByRole("button", { name: "返回图片" }).click();
   await workspace.getByRole("button", { name: "生成变体", exact: true }).click();
   await workspace.getByRole("textbox", { name: "变体修改说明" }).fill("尝试两种领型");
   await workspace.getByRole("textbox", { name: "变体保留特征" }).fill("保留面料与配色");
   await closeNodeDetails(page);
-  await page.getByRole("button", { name: "助手", exact: true }).click();
+  await page.getByRole("button", { name: "设计工作台", exact: true }).click();
+  await page.getByRole("button", { name: "展开设计助手", exact: true }).click();
   await expect(workspace).toBeHidden();
   await page.getByRole("textbox", { name: "描述设计需求" }).fill("助手自己的草稿");
-  await page.getByRole("button", { name: "画布", exact: true }).click();
+  await page.getByRole("button", { name: "返回画布", exact: true }).click();
+  await page.getByRole("button", { name: "流程画布", exact: true }).click();
   await page.locator('[data-type="candidate"]').first().dblclick();
   await expect(workspace.getByRole("textbox", { name: "变体修改说明" })).toHaveValue("尝试两种领型");
+  await workspace.getByRole("button", { name: "返回图片" }).click();
   await workspace.getByRole("button", { name: "局部重绘", exact: true }).click();
   await expect(workspace.getByRole("textbox", { name: "局部重绘说明" })).toHaveValue("调整袖口宽度");
   await expect(workspace.getByRole("button", { name: "撤销一笔" })).toBeEnabled();
@@ -790,11 +805,14 @@ test("智能配色：系列 DNA 自动保存失败可重试，重新打开保留
 });
 
 async function showCanvas(page: Page, width: number) {
-  if (width < 768) await page.getByRole("button", { name: "画布", exact: true }).click();
+  const canvas = page.getByRole("region", { name: "设计工作流画布" });
+  const returnCanvas = page.getByRole("button", { name: "返回画布", exact: true });
+  await expect(canvas.or(returnCanvas).first()).toBeVisible();
+  if (width < 768 && await page.getByRole("button", { name: "返回画布", exact: true }).isVisible()) await page.getByRole("button", { name: "返回画布", exact: true }).click();
   else if (width < 1100 && await page.getByRole("button", { name: "收起设计助手" }).isVisible()) await page.getByRole("button", { name: "收起设计助手" }).click();
 }
 async function showAssistant(page: Page, width: number) {
-  if (width < 768) await page.getByRole("button", { name: "助手", exact: true }).click();
+  if (width < 768) await page.getByRole("button", { name: "展开设计助手", exact: true }).click();
   else if (await page.getByRole("button", { name: "展开设计助手" }).isVisible()) await page.getByRole("button", { name: "展开设计助手" }).click();
 }
 
