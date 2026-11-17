@@ -455,7 +455,7 @@ test("聚焦工作区：色卡与草图嵌入编辑、返回恢复和放弃草�
   await expect(workspace.getByRole("button", { name: "撤销", exact: true })).toBeDisabled();
   await expect(workspace.getByText("未保存", { exact: true })).toHaveCount(0);
   await workspace.locator("summary:visible").filter({ hasText: /^素材详情与用途$/u }).click();
-  await expect(valueControl(workspace, "参考图角色")).toBeVisible();
+  await expect(valueControl(workspace, "参考图角色")).toHaveCount(0);
   await expect(workspace.getByRole("button", { name: "从工作流移除节点" })).toBeVisible();
 });
 
@@ -478,7 +478,7 @@ test("聚焦工作区：后台更新保护草稿，刷新提醒与录屏", async
     await page.evaluate(() => window.dispatchEvent(new Event("fashion-workflow:refresh")));
     await expect(workspace.getByText("节点内容或权限已更新", { exact: false })).toBeVisible();
     await expect(workspace.getByRole("textbox", { name: "执行指令", exact: true })).toHaveValue("我尚未保存的设计要求");
-    await expect(workspace.getByRole("button", { name: "保存工具参数" })).toBeDisabled();
+    await expect(workspace.getByRole("button", { name: "保存工具参数" })).toHaveCount(0);
     expect(await page.evaluate(() => { const event = new Event("beforeunload", { cancelable: true }); window.dispatchEvent(event); return event.defaultPrevented; })).toBe(true);
     await workspace.getByRole("button", { name: "载入最新内容并放弃草稿" }).click();
     await expect(workspace.getByRole("textbox", { name: "执行指令", exact: true })).toHaveValue("后台更新的参数");

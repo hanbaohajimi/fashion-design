@@ -545,7 +545,7 @@ export function ToolSettings({
         JSON.stringify(draft.referenceInputs) !==
           JSON.stringify(original.referenceInputs)));
   useWorkspaceDraft("tool", draft, dirty, saving || executing);
-  usePersistentDraft({ value: draft, restore: setDraft, baseline: originalSignature, objectKey: `tool:${node.id}`, enabled: canEdit });
+  usePersistentDraft({ value: draft, restore: setDraft, baseline: originalSignature, objectKey: `tool:${node.id}`, enabled: canEdit || dirty });
   useEffect(() => {
     onDirtyChange?.(canEdit && dirty);
   }, [canEdit, dirty, onDirtyChange]);
