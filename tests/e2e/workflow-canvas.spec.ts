@@ -826,7 +826,7 @@ async function showAssistant(page: Page, width: number) {
 }
 
 for (const width of [1280, 375]) {
-  test(`精简空画布 ${width}：推荐起点唯一，素材和导出按需可达`, async ({ page }) => {
+  test(`精简空画布 ${width}：推荐起点唯一，助手和素材入口可达`, async ({ page }) => {
     const mocked = await mockWorkflow(page);
     mocked.getGraph().nodes.splice(0);
     mocked.getGraph().edges.splice(0);
@@ -839,13 +839,10 @@ for (const width of [1280, 375]) {
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await mkdir("output/playwright/simplification", { recursive: true });
     await page.screenshot({ path: `output/playwright/simplification/empty-canvas-${width}.png` });
-    await welcome.getByRole("button", { name: "开始设计", exact: true }).click();
+    await welcome.getByRole("button", { name: "开始设计对话", exact: true }).click();
     await expect(page.getByRole("textbox", { name: "描述设计需求" })).toBeFocused();
     await expect(page.getByRole("dialog")).toHaveCount(0);
     await showCanvas(page, width);
-    await page.getByText("资料与更多", { exact: true }).click();
-    await expect(page.getByRole("button", { name: "导出画布 PNG", exact: true })).toBeVisible();
-    await page.keyboard.press("Escape");
     await page.getByRole("button", { name: "＋ 添加素材", exact: true }).click();
     await expect(page.getByRole("button", { name: "廓形草图 上传已绘制的草图", exact: true })).toBeVisible();
   });
@@ -899,7 +896,7 @@ for (const width of [1280, 375]) {
     mocked.getGraph().edges.push(edge("direct-output", tool.id, "direct-result", "source"));
     mocked.getGraph().revision++;
     await expect(card.getByRole("button", { name: "查看大图：新风衣方案", exact: true })).toBeVisible();
-    const openResult = card.getByRole("button", { name: "查看大图：新风衣方案", exact: true }).getByText("查看大图", { exact: true });
+    const openResult = card.getByRole("button", { name: "查看大图：新风衣方案", exact: true });
     await expect(openResult).toBeInViewport({ ratio: 1 });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.screenshot({ path: `output/playwright/assistant-direct/result-${width}.png` });
@@ -942,6 +939,7 @@ test("帮助提示可键盘关闭，草图窗口圈定焦点并返回素材入�
 
 test("阅读历史时新消息不会抢走滚动位置，点击提示后回到最新消息", async ({ page }) => {
   const mocked = await mockWorkflow(page);
+  await seedOpenAssistant(page);
   mocked.setMessages(Array.from({ length: 12 }, (_, index) => ({
     id: `reading-${index}`, role: "assistant", status: "completed", kind: "reply", proposal: null,
     content: `第 ${index + 1} 条设计讨论\n${"继续比较廓形、面料与细节。".repeat(20)}`, createdAt: NOW,
