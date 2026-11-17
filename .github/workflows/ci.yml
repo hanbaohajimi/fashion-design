@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-24.04
     # The serial browser suite now contains about 1,000 contracts, followed by
     # pinned screenshot comparisons. Preserve enough time to finish both.
-    timeout-minutes: 120
+    timeout-minutes: 180
     env:
       API_INTERNAL_URL: http://127.0.0.1:3001
       APP_ORIGIN: http://localhost:3000
