@@ -19,18 +19,7 @@ for (const width of [1738, 1440, 1280, 1200, 1199, 1024, 390]) {
       page.getByRole("heading", { name: "夹克商品展示", exact: true }),
     ).toBeVisible();
     await expect(page.getByLabel("展示包名称", { exact: true })).toBeVisible();
-    if (width < 1200) {
-      await page.getByRole("button", { name: "展开工作区目录", exact: true }).click();
-      await page.getByRole("tab", { name: "款式档案", exact: true }).click();
-      await expect(page).toHaveURL(/tab=styles/);
-      // The responsive variant is intentionally scoped to this page.
-      await page.goto(`/${PROJECT}/studio?tab=presentation`);
-      await expect(page).toHaveURL(/tab=presentation/);
-    } else {
-      await expect(
-        page.getByRole("tab", { name: "商品展示", exact: true }),
-      ).toBeVisible();
-    }
+    await expect(page.getByRole("button", { name: "返回画布", exact: true })).toBeVisible();
     expect(
       await page.evaluate(
         () => document.documentElement.scrollWidth <= innerWidth,
@@ -152,8 +141,8 @@ test("父级导航层级在工作室子页间保持一致", async ({ page }) => 
   await page.goto(`/${PROJECT}/studio?tab=presentation`);
   const parent = page
     .getByRole("navigation", { name: "工作区导航" })
-    .getByRole("link", { name: "款式与交付", exact: true });
-  await expect(parent).toHaveAttribute("data-current-parent", "true");
-  await page.getByRole("tab", { name: "款式档案", exact: true }).click();
-  await expect(parent).toHaveAttribute("data-current-parent", "true");
+    .getByRole("link", { name: "项目", exact: true });
+  await expect(parent).toHaveAttribute("aria-current", "page");
+  await page.goto(`/${PROJECT}/studio?tab=styles`);
+  await expect(parent).toHaveAttribute("aria-current", "page");
 });

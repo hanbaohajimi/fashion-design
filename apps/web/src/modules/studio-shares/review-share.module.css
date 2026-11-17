@@ -99,7 +99,7 @@
   margin: 7px 0 0;
 }
 .sectionHeader > span {
-  color: var(--color-ink-tertiary);
+  color: var(--color-ink-secondary);
   font-size: 12px;
   font-variant-numeric: tabular-nums;
 }

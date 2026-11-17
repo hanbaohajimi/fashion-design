@@ -186,7 +186,7 @@ export function CreationComposer({ ref, creation, source, value, graph, canEdit,
       </li>;
     })}</ol> : null}
     <div ref={setVoiceFeedback} className={styles.voiceFeedback} />
-    <textarea ref={input} aria-label="本次创作要求" value={draft.prompt} readOnly={transform} disabled={!canEdit} maxLength={4000} placeholder={creation?.module === "text" ? "描述要起草的文字，或选择参考后输入改写要求…" : "描述想创作的画面，或对参考图片提出修改要求…"}
+    <textarea ref={input} aria-label="本次创作要求" value={draft.prompt} readOnly={transform} disabled={!canEdit || !recovery.ready} maxLength={4000} placeholder={creation?.module === "text" ? "描述要起草的文字，或选择参考后输入改写要求…" : "描述想创作的画面，或对参考图片提出修改要求…"}
       onCompositionStart={() => ime.current.start()} onCompositionEnd={() => ime.current.end()}
       onChange={(event) => {
         const prompt = event.currentTarget.value;

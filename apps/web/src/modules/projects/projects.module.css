@@ -271,7 +271,7 @@
 
 .search > span {
   font-size: var(--text-xl);
-  color: var(--color-ink-tertiary);
+  color: var(--color-ink-secondary);
 }
 
 .search input {
@@ -488,7 +488,7 @@
   font-weight: var(--font-bold);
   list-style: none;
   text-align: right;
-  color: var(--color-ink-tertiary);
+  color: var(--color-ink-secondary);
 }
 
 .cardMenu summary::-webkit-details-marker {
@@ -549,7 +549,7 @@
   display: flex;
   margin-top: var(--space-2);
   justify-content: space-between;
-  color: var(--color-ink-tertiary);
+  color: var(--color-ink-secondary);
   letter-spacing: 0.04em;
 }
 
