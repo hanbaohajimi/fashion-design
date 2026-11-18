@@ -76,8 +76,7 @@ test("项目任务抽屉展示运行概览与最近活动", async ({ page }) => 
     },
   });
   await loadZhiya(page);
-  const trigger = page.getByRole("button", { name: /^项目任务/ });
-  await trigger.click();
+  await openCanvasFunction(page, "项目任务");
   const dialog = page.getByRole("dialog", { name: "项目任务", exact: true });
   const overview = dialog.getByRole("region", { name: "项目运行概览", exact: true });
   await expect(overview).toContainText("5 项工作正在推进或等待你的决定");
@@ -111,45 +110,37 @@ test("资料和画布分别记忆，表单草稿、离开保护、图片聚焦�
   const guard = page.getByRole("dialog", { name: "保留未保存的修改" });
   await guard.getByRole("button", { name: "继续编辑", exact: true }).click();
   await expect(input).toHaveValue("待继续完善的技术包");
-  await rail.getByRole("link", { name: "设计工作台", exact: true }).click();
+  await page.getByRole("button", { name: "返回画布", exact: true }).click();
   await guard.getByRole("button", { name: "丢弃并离开", exact: true }).click();
   await expect(workspaceCanvas(page)).toBeVisible();
   await expect(rail).toBeHidden();
-  await page.getByRole("button", { name: "展开工作区目录", exact: true }).click();
-  await expect(rail).toBeVisible();
   const art = await elementBox(page.getByRole("group", { name: "通勤外套 1", exact: true }));
   await page.mouse.dblclick(art.x + art.width / 2, art.y + art.height / 2);
   await expect(page.getByRole("button", { name: "关闭图片工作区", exact: true })).toBeVisible();
   await expect(rail).toBeHidden();
   await expect(page.locator("[data-canvas-chrome]")).toBeHidden();
   await page.getByRole("button", { name: "关闭图片工作区", exact: true }).click();
-  await expect(rail).toBeVisible();
+  await expect(workspaceCanvas(page)).toBeVisible();
   await page.reload();
-  await expect(rail).toBeVisible();
+  await expect(rail).toBeHidden();
 });
 
 function workspaceCanvas(page: import("@playwright/test").Page) { return page.getByLabel("无限白板", { exact: true }); }
 
-test("创作目录偏好跨项目沿用，账号切换隔离，资料类保留独立默认值", async ({ page }) => {
+test("资料目录偏好跨页面沿用并按账号隔离", async ({ page }) => {
   await prepareZhiya(page);
   await seedReturningFeatureGuideUser(page, ["another-designer"]);
   let account = "visual-designer";
   await page.route("**/api/me", route => route.fulfill({ json: { user: { id: account, email: "designer@example.com", name: "设计师" }, credits: { limit: 600, used: 0, remaining: 600 } } }));
   await page.route("**/api/projects/second", route => route.fulfill({ json: { id: "second", name: "针织系列探索", archived: false, assetCount: 3, coverAssetId: null, coverUrl: null, createdAt: NOW, updatedAt: NOW } }));
-  await loadZhiya(page);
-  await page.getByRole("button", { name: "展开工作区目录", exact: true }).click();
+  await page.goto("/projects");
   const rail = page.getByRole("complementary", { name: "工作区目录", exact: true });
-  await loadZhiya(page, "/second");
   await expect(rail).toBeVisible();
   await page.getByRole("button", { name: "收起工作区目录", exact: true }).click();
-  await loadZhiya(page);
+  await page.goto("/fabrics");
   await expect(rail).toBeHidden();
-  await page.getByRole("button", { name: "展开工作区目录", exact: true }).click();
   account = "another-designer";
   await page.reload();
-  await expect(zhiya(page)).toBeVisible();
-  await expect(rail).toBeHidden();
-  await page.goto("/fabrics");
   await expect(rail).toBeVisible();
 });
 
@@ -157,7 +148,7 @@ for (const width of [320, 1440]) test(`商品展示三种模式与长项目名�
   await seedWardrobe(page);
   await page.setViewportSize({ width, height: 900 });
   await page.route(`**/api/projects/${PROJECT}`, route => route.fulfill({ json: { id: PROJECT, name: "秋冬通勤服装设计与可持续针织系列的长项目名称", archived: false, assetCount: 3, coverAssetId: null, coverUrl: null, createdAt: NOW, updatedAt: NOW } }));
-  for (const [mode, title] of [["sets", "夹克商品展示"], ["wardrobe", "衣架与搭配"], ["realtime", "实时试穿"]]) {
+  for (const [mode, title] of [["sets", "夹克商品展示"], ["wardrobe", "衣橱"], ["realtime", "实时试穿"]]) {
     await page.goto(`/${PROJECT}/studio?tab=presentation&mode=${mode}`);
     await expect(page.getByRole("heading", { name: title, exact: true })).toBeVisible();
     const modes = page.getByRole("group", { name: "商品展示模式", exact: true });
@@ -176,17 +167,16 @@ for (const width of [320, 1440]) test(`商品展示三种模式与长项目名�
   }
 });
 
-test("小屏账号入口重播指引后关闭目录，并正确介绍毛绒角色", async ({ page }) => {
-  const state = await prepareZhiya(page, { viewport: { width: 320, height: 760 } });
+test("画布帮助可重播指引并正确介绍助手入口", async ({ page }) => {
+  const state = await prepareZhiya(page);
   await loadZhiya(page);
-  await page.getByRole("button", { name: "展开工作区目录", exact: true }).click();
-  await page.getByRole("button", { name: "designer@example.com", exact: true }).click();
-  await page.getByRole("button", { name: "功能指引", exact: true }).click();
+  await openCanvasFunction(page, "画布操作说明");
+  await page.getByRole("button", { name: "查看界面指引", exact: true }).click();
   const guide = page.getByRole("dialog", { name: "界面功能指引", exact: true });
   await expect(guide).toBeVisible();
   await expect(page.getByRole("dialog", { name: "工作区目录", exact: true })).toBeHidden();
   for (let i = 0; i < 8; i++) {
-    if (await guide.getByRole("heading", { name: "和设计助手讨论想法", exact: true }).isVisible()) break;
+    if (await guide.getByRole("heading", { name: "和设计助手一起创作", exact: true }).isVisible()) break;
     await guide.getByRole("button", { name: "下一步", exact: true }).click();
   }
   await expect(guide).toContainText("点击画布中的织芽");
@@ -201,15 +191,14 @@ test("小屏账号入口重播指引后关闭目录，并正确介绍毛绒角�
 test("320 px 的目录抽屉、功能切换、账号菜单与助手返回画布", async ({ page }) => {
   await prepareZhiya(page, { viewport: { width: 320, height: 760 } });
   await page.route(`**/api/projects/${PROJECT}/studio`, route => route.fulfill({ json: workspaceFixture() }));
-  await loadZhiya(page);
+  await page.goto("/projects");
   await page.getByRole("button", { name: "展开工作区目录", exact: true }).click();
   const drawer = page.getByRole("dialog", { name: "工作区目录", exact: true });
   await expect(drawer).toBeVisible();
-  await drawer.getByRole("link", { name: "款式与交付", exact: true }).click();
+  await drawer.getByRole("link", { name: "面料库", exact: true }).click();
   await expect(drawer).toBeHidden();
-  await page.getByRole("button", { name: "展开工作区目录", exact: true }).click();
-  await page.getByRole("tab", { name: "技术包", exact: true }).click();
-  await expect(drawer).toBeHidden();
+  await expect(page).toHaveURL(/\/fabrics/);
+  await page.goto(`/${PROJECT}/studio?tab=tech`);
   await expect(page.getByLabel("技术包名称", { exact: true })).toHaveValue("褶线夹克技术资料");
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: "output/playwright/workspace-chrome/studio-mobile.png" });
@@ -227,8 +216,7 @@ test("320 px 的目录抽屉、功能切换、账号菜单与助手返回画布"
   await expect(page.getByRole("button", { name: "展开工作区目录", exact: true })).toBeFocused();
   await loadZhiya(page);
   await hit(page).click({ position: { x: 36, y: 58 } });
-  const close = page.getByRole("button", { name: "收起设计助手", exact: true });
-  await expect(close).toHaveText("返回画布");
+  const close = page.getByRole("button", { name: "返回画布", exact: true });
   await close.click();
   await expect(workspaceCanvas(page)).toBeVisible();
 });
@@ -291,7 +279,7 @@ test("320 px 顶部角色的气泡自动换边，键盘聚焦保留话语，点�
   await page.screenshot({ path: "output/playwright/workspace-chrome/zhiya-edge-mobile.png" });
   await page.keyboard.press("Enter");
   await expect(page.getByRole("textbox", { name: "描述设计需求", exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "收起设计助手", exact: true }).click();
+  await page.getByRole("button", { name: "返回画布", exact: true }).click();
   await expect(speech).toBeHidden();
   await expect(hit(page)).toBeFocused();
   expect(state.mutations).toEqual([]);

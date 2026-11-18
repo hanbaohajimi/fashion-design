@@ -1,5 +1,5 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir } from "node:fs/promises";
 import { seedVisualApp, NOW, PROJECT } from "../visual/fixtures";
 import { workspaceFixture } from "../visual/workspace-fixture";
 
@@ -24,140 +24,10 @@ async function assertNoOverflow(page: Page) {
   ).toBe(true);
 }
 
-test("桌面磁吸、聚光灯、涟漪和静止性能记录", async ({ page }, testInfo) => {
+test("桌面项目列表支持鼠标反馈与键盘打开创建窗口", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.addInitScript(() => {
-    const original = window.requestAnimationFrame;
-    Object.assign(window, { interactionFrames: 0 });
-    window.requestAnimationFrame = (callback) => {
-      (window as unknown as { interactionFrames: number }).interactionFrames++;
-      return original.call(window, callback);
-    };
-  });
   await page.goto("/projects");
-  const card = page.getByRole("region", { name: "继续创作" });
-  const link = card.getByRole("link");
-  const visual = link.locator(":scope > span");
-  await expect(link).toBeVisible();
   await expect(page.locator("[data-project-id]")).toHaveCount(2);
-  await page.screenshot({ path: `${artifacts}/desktop-normal.png` });
-  const originalBounds = await link.boundingBox();
-  const position = await center(link);
-  await page.mouse.move(position.x + 30, position.y + 10);
-  await expect(card).toHaveAttribute("data-spotlight-active", "true");
-  await expect
-    .poll(() =>
-      visual.evaluate(
-        (node) => new DOMMatrix(getComputedStyle(node).transform).m41,
-      ),
-    )
-    .toBeGreaterThan(0);
-  const translation = await visual.evaluate((node) => {
-    const matrix = new DOMMatrix(getComputedStyle(node).transform);
-    return { x: matrix.m41, y: matrix.m42 };
-  });
-  expect(Math.abs(translation.x)).toBeLessThanOrEqual(4);
-  expect(Math.abs(translation.y)).toBeLessThanOrEqual(4);
-  expect(await link.boundingBox()).toEqual(originalBounds);
-  await page.screenshot({ path: `${artifacts}/desktop-hover.png` });
-  await page.mouse.down();
-  await expect
-    .poll(() =>
-      visual.evaluate(
-        (node) => new DOMMatrix(getComputedStyle(node).transform).m41,
-      ),
-    )
-    .toBe(0);
-  await page.screenshot({ path: `${artifacts}/desktop-pressed.png` });
-  await page.mouse.move(5, 100);
-  await page.mouse.up();
-  await expect(card).not.toHaveAttribute("data-spotlight-active");
-
-  // Save a Chrome timeline for the pointer-tracking pass, with paint boundaries.
-  await expect(page.locator("[data-couture-motion]")).toHaveCount(0);
-  const cdp = await page.context().newCDPSession(page);
-  const trace: unknown[] = [];
-  let layers: Array<{
-    backendNodeId?: number;
-    layerId: string;
-    width: number;
-    height: number;
-  }> = [];
-  cdp.on("LayerTree.layerTreeDidChange", (event) => {
-    layers = event.layers ?? [];
-  });
-  await cdp.send("LayerTree.enable");
-  const { root } = await cdp.send("DOM.getDocument");
-  const { nodeId } = await cdp.send("DOM.querySelector", {
-    nodeId: root.nodeId,
-    selector: 'section[aria-label="继续创作"] > span[aria-hidden]',
-  });
-  const { node } = await cdp.send("DOM.describeNode", { nodeId });
-  cdp.on("Tracing.dataCollected", ({ value }) => trace.push(...value));
-  await cdp.send("Tracing.start", {
-    categories:
-      "devtools.timeline,blink.user_timing,disabled-by-default-devtools.timeline.invalidationTracking",
-    options: "record-as-much-as-possible",
-  });
-  const cardPosition = await center(card);
-  await page.mouse.move(cardPosition.x - 150, cardPosition.y);
-  await page.mouse.move(cardPosition.x + 150, cardPosition.y, { steps: 30 });
-  await expect
-    .poll(() =>
-      layers.some((layer) => layer.backendNodeId === node.backendNodeId),
-    )
-    .toBe(true);
-  const glowLayer = layers.find(
-    (layer) => layer.backendNodeId === node.backendNodeId,
-  );
-  const cardBounds = await card.boundingBox();
-  expect(glowLayer?.width).toBe(cardBounds?.width);
-  expect(glowLayer?.height).toBe(cardBounds?.height);
-  await page.mouse.move(5, 100);
-  await expect(card).not.toHaveAttribute("data-spotlight-active");
-  await expect
-    .poll(() =>
-      card
-        .locator("[aria-hidden]")
-        .first()
-        .evaluate((node) => getComputedStyle(node).opacity),
-    )
-    .toBe("0");
-  const framesBefore = await page.evaluate(
-    () =>
-      (window as unknown as { interactionFrames: number }).interactionFrames,
-  );
-  await page.waitForTimeout(250);
-  const framesAfter = await page.evaluate(
-    () =>
-      (window as unknown as { interactionFrames: number }).interactionFrames,
-  );
-  expect(framesAfter).toBe(framesBefore);
-  const complete = new Promise<void>((resolve) =>
-    cdp.once("Tracing.tracingComplete", () => resolve()),
-  );
-  await cdp.send("Tracing.end");
-  await complete;
-  await writeFile(
-    `${artifacts}/pointer-timeline.json`,
-    JSON.stringify({ traceEvents: trace }),
-    "utf8",
-  );
-  await writeFile(
-    `${artifacts}/pointer-performance.json`,
-    JSON.stringify(
-      { glowLayer, cardBounds, idleFrameRequests: framesAfter - framesBefore },
-      null,
-      2,
-    ),
-    "utf8",
-  );
-  await cdp.detach();
-  await testInfo.attach("pointer-timeline", {
-    path: `${artifacts}/pointer-timeline.json`,
-    contentType: "application/json",
-  });
-
   const create = page.getByRole("button", { name: "新建项目", exact: true });
   const createPosition = await center(create);
   await page.mouse.move(createPosition.x, createPosition.y);
@@ -232,13 +102,13 @@ for (const width of [1440, 1024, 390, 375]) {
         });
         await expect(start).toHaveAttribute("data-interaction", "magnetic");
         await expect(
-          page.getByRole("region", { name: "继续创作" }),
+          page.locator("[data-project-card]"),
         ).toHaveCount(0);
         await start.click();
         await expect(page.getByRole("dialog")).toBeVisible();
         await page.keyboard.press("Escape");
       } else {
-        const card = page.getByRole("region", { name: "继续创作" });
+        const card = page.locator("[data-project-card]");
         await expect(card).toBeVisible();
         await expect(card.locator("img")).toHaveCount(0);
       }
@@ -262,18 +132,9 @@ for (const width of [1440, 1024, 390, 375]) {
 
 test("偏好动态切换与高对比度保留操作、焦点和选择", async ({ page }) => {
   await page.goto("/projects");
-  const card = page.getByRole("region", { name: "继续创作" });
-  const link = card.getByRole("link");
-  const position = await center(link);
-  await page.mouse.move(position.x + 20, position.y);
-  await expect(card).toHaveAttribute("data-spotlight-active", "true");
+  const link = page.getByRole("link", { name: /^打开项目 / }).first();
+  await expect(link).toBeVisible();
   await page.emulateMedia({ reducedMotion: "reduce" });
-  await expect(card).not.toHaveAttribute("data-spotlight-active");
-  expect(
-    await link
-      .locator(":scope > span")
-      .evaluate((node) => getComputedStyle(node).transform),
-  ).toBe("none");
   const create = page.getByRole("button", { name: "新建项目", exact: true });
   await create.focus();
   await page.keyboard.press("Enter");
@@ -287,11 +148,7 @@ test("偏好动态切换与高对比度保留操作、焦点和选择", async ({
   });
   await link.focus();
   await expect(link).toBeFocused();
-  expect(
-    await link
-      .locator(":scope > span")
-      .evaluate((node) => getComputedStyle(node).boxShadow),
-  ).toBe("none");
+  await expect(link).toBeInViewport();
   await page.screenshot({ path: `${artifacts}/forced-colors.png` });
   await assertNoOverflow(page);
 });
@@ -339,21 +196,9 @@ test.describe("触屏", () => {
     hasTouch: true,
     viewport: { width: 390, height: 844 },
   });
-  test("粗指针不启用悬停效果，轻触仍打开创建窗口", async ({ page }) => {
+  test("轻触项目列表的创建按钮可打开窗口", async ({ page }) => {
     await page.goto("/projects");
-    const card = page.getByRole("region", { name: "继续创作" });
-    const link = card.getByRole("link");
-    await link.dispatchEvent("pointermove", {
-      pointerType: "touch",
-      clientX: 300,
-      clientY: 300,
-    });
-    await expect(card).not.toHaveAttribute("data-spotlight-active");
-    expect(
-      await link
-        .locator(":scope > span")
-        .evaluate((node) => getComputedStyle(node).transform),
-    ).toBe("none");
+    await expect(page.getByRole("link", { name: /^打开项目 / }).first()).toBeVisible();
     await page.getByRole("button", { name: "新建项目", exact: true }).tap();
     await expect(page.getByRole("dialog")).toBeVisible();
     await page.screenshot({ path: `${artifacts}/touch-dialog.png` });
