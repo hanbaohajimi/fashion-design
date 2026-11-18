@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { Button, Dialog, Input, Menu, Notice } from "../../../components/ui";
+import { MotionReceipt } from "../../../components/motion/MotionReceipt";
 import { useGuardedRouter } from "../../use-guarded-router";
 import {
   useDeleteProject,
@@ -39,7 +40,9 @@ export function CanvasProjectMenu({
         className={styles.canvasProjectMenu}
         trigger={
           <>
-            <span title={projectName}>{projectName}</span>
+            <MotionReceipt receiptKey={`project:${projectId}`}>
+              <span title={projectName}>{projectName}</span>
+            </MotionReceipt>
             <svg
               aria-hidden="true"
               width="14"

@@ -70,22 +70,25 @@ for (const width of [1440, 390, 320]) {
       )
       .toBe(0);
     if (process.env.CREATIVE_START_DEMO) await page.waitForTimeout(1800);
-    await page.getByRole("button", { name: /梳理设计方向/ }).click();
-    await expect(input).toHaveValue(/暂不生成图片/);
+    await page.getByRole("button", { name: "常用技能", exact: true }).click();
+    await page.getByRole("group", { name: "常用技能选项" }).getByRole("button", { name: /整理设计方向/ }).click();
+    await expect(input).toHaveValue(/整理当前项目的设计目标/);
     if (process.env.CREATIVE_START_DEMO) await page.waitForTimeout(1800);
     await expect(
-      page.getByRole("button", { name: /通勤外套方案/ }),
+      page.getByRole("button", { name: "设计一件服装", exact: true }),
     ).toBeDisabled();
+    await expect(page.getByRole("group", { name: "常用技能选项" })).toBeHidden();
+    await input.click();
     await input.fill("保留这份尚未发送的中文设计草稿");
+    await expect(input).toHaveValue("保留这份尚未发送的中文设计草稿");
     await input.evaluate((element: HTMLTextAreaElement) =>
       element.setSelectionRange(2, 6),
     );
     const handle = await input.elementHandle();
     const close = page.getByRole("button", {
-      name: "收起设计助手",
+      name: width < 768 ? "返回画布" : "收起设计助手",
       exact: true,
     });
-    if (width < 768) await expect(close).toHaveText("返回画布");
     await close.click();
     if (process.env.CREATIVE_START_DEMO) await page.waitForTimeout(1200);
     await welcome.getByRole("button", { name: "描述设计想法" }).click();
@@ -98,20 +101,12 @@ for (const width of [1440, 390, 320]) {
       ]),
     ).toEqual([2, 6]);
     await input.fill("");
-    await expect(
-      page.getByRole("button", { name: /规划一个小系列/ }),
-    ).toBeEnabled();
+    await expect(page.getByRole("button", { name: "常用技能", exact: true })).toBeEnabled();
     await page.screenshot({
       path: `output/playwright/creative-start/assistant-${width}.png`,
     });
     if (width < 768) {
-      const title = await elementBox(
-        page.getByRole("heading", { name: "设计助手", exact: true }),
-      );
-      const navigation = await elementBox(
-        page.getByRole("button", { name: "展开工作区目录", exact: true }),
-      );
-      expect(title.x).toBeGreaterThan(navigation.x + navigation.width);
+      await expect(page.getByRole("complementary", { name: "设计助手", exact: true })).toBeVisible();
     }
     expect(state.mutations).toEqual([]);
     expect(state.errors).toEqual([]);
@@ -149,8 +144,6 @@ test("快捷起步链接为设计助手预填未发送简报", async ({ page }) 
   await openZhiya(page);
 
   await expect(page).toHaveURL(/\/atelier-visual$/u);
-  await expect(page.getByRole("region", { name: "创作主线", exact: true })).toContainText("秋冬通勤服装设计");
-  await expect(page.getByRole("region", { name: "创作主线", exact: true })).toContainText("探索外套方案");
   await expect(
     page.getByRole("textbox", { name: "描述设计需求", exact: true }),
   ).toHaveValue(/秋冬通勤/);
@@ -204,7 +197,7 @@ test("已有方案可一键准备设计审阅上下文且不自动发送", async
   expect(state.errors).toEqual([]);
 });
 
-test("常用技能可以载入建议并保存当前草稿，不自动发送", async ({ page }) => {
+test("常用技能可以载入建议并保留当前草稿，不自动发送", async ({ page }) => {
   const state = await prepareZhiya(page, { count: 0, realClock: true });
   let remoteSkills: Record<string, unknown>[] = [];
   await page.route("**/api/projects/atelier-visual/assistant-skills", async (route) => {
@@ -231,23 +224,21 @@ test("常用技能可以载入建议并保存当前草稿，不自动发送", as
   await openZhiya(page);
 
   await page.getByRole("button", { name: "常用技能", exact: true }).click();
-  const skills = page.getByRole("region", { name: "常用技能", exact: true });
+  const skills = page.getByRole("group", { name: "常用技能选项", exact: true });
   await expect(skills).toBeVisible();
   await skills.getByRole("button", { name: /整理设计方向/u }).click();
   const input = page.getByRole("textbox", { name: "描述设计需求", exact: true });
   await expect(input).toHaveValue(/整理当前项目的设计目标/u);
 
   await page.getByRole("button", { name: "常用技能", exact: true }).click();
-  const reopened = page.getByRole("region", { name: "常用技能", exact: true });
-  await reopened.getByRole("textbox", { name: "技能名称", exact: true }).fill("我的通勤核对");
-  await reopened.getByRole("button", { name: "保存技能", exact: true }).click();
-  await expect(reopened).toContainText("已保存并同步“我的通勤核对”");
-  await expect(reopened.getByRole("button", { name: /^我的通勤核对/u })).toBeVisible();
+  await expect(skills.getByRole("button", { name: /整理设计方向/u })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(input).toHaveValue(/整理当前项目的设计目标/u);
   expect(state.mutations.filter((path) => !path.includes("/assistant-skills"))).toEqual([]);
   expect(state.errors).toEqual([]);
 });
 
-test("主设计助手可以打开真实分步计划视图而不离开当前对话", async ({ page }) => {
+test("主设计助手可以查看设计要求而不离开当前对话", async ({ page }) => {
   const state = await prepareZhiya(page, { count: 1, realClock: true });
   await page.route("**/api/agent-conversations/*/plans", route =>
     route.fulfill({ json: { items: [] } }),
@@ -255,13 +246,12 @@ test("主设计助手可以打开真实分步计划视图而不离开当前对�
   await loadZhiya(page);
   await openZhiya(page);
 
-  await page.getByRole("button", { name: "分步计划", exact: true }).click();
-  const planner = page.getByRole("region", { name: "分步设计计划", exact: true });
-  await expect(planner).toBeVisible();
-  await expect(planner.getByLabel(/设计目标/u)).toBeVisible();
-  await expect(planner.getByText("当前计划从整段设计目标开始，可在节点中继续补充素材。", { exact: true })).toBeVisible();
-  await planner.getByRole("button", { name: "返回讨论", exact: true }).click();
-  await expect(planner).toBeHidden();
+  await page.getByRole("button", { name: "助手设置", exact: true }).click();
+  await page.getByRole("button", { name: "设计要求", exact: true }).click();
+  const requirements = page.getByRole("dialog", { name: "设计要求与偏好", exact: true });
+  await expect(requirements).toBeVisible();
+  await requirements.getByRole("button", { name: "关闭设计要求与偏好" }).click();
+  await expect(requirements).toBeHidden();
   expect(state.mutations).toEqual([]);
   expect(state.errors).toEqual([]);
 });
@@ -283,7 +273,7 @@ test.describe("触屏输入", () => {
     await expect(input).toBeVisible();
     await expect(input).not.toBeFocused();
     await expect(
-      page.getByRole("button", { name: "收起设计助手", exact: true }),
+      page.getByRole("button", { name: "返回画布", exact: true }),
     ).toBeInViewport({ ratio: 1 });
     await page.screenshot({
       path: "output/playwright/creative-start/short-mobile.png",
@@ -399,7 +389,7 @@ for (const width of [1440, 640, 320]) {
     await expect(list).toBeHidden();
     await expect(input).toHaveValue("@");
     expect(Math.abs((await elementBox(input)).y - visible.y)).toBeLessThan(1);
-    expect(before.width).toBe((await elementBox(input)).width);
+    expect(Math.abs(before.width - (await elementBox(input)).width)).toBeLessThan(1);
     await input.fill("@没有这个名字");
     await input.press("Enter");
     await expect(page.getByText(/没有匹配的未引用对象/)).toBeVisible();

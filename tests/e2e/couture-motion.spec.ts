@@ -208,12 +208,6 @@ test("新面料落定、任务起针和真实阶段切换、候选揭幕均只�
   const graph = await page.evaluate(async () =>
     (await fetch("/api/projects/atelier-visual/workflow/sync")).json(),
   );
-  // Keep polling active without simulating a historical task as a fresh submission.
-  graph.nodes[0].payload = {
-    ...graph.nodes[0].payload,
-    roleInferenceState: "pending",
-  };
-  graph.nodes[0].type = "reference_image";
   await page.route(`**/api/projects/${PROJECT}/workflow/sync`, (route) =>
     route.fulfill({ json: graph }),
   );
@@ -225,11 +219,14 @@ test("新面料落定、任务起针和真实阶段切换、候选揭幕均只�
     transferMode: "ReturnAsStream",
   });
   const tool = graph.nodes.find((node: { id: string }) => node.id === "tool");
+  const refresh = () => page.evaluate(() => window.dispatchEvent(new Event("fashion-workflow:refresh")));
   graph.revision++;
   tool.status = "queued";
+  await refresh();
   await expect(page.locator('[data-kind="tool"][data-status="queued"]')).toBeVisible();
   graph.revision++;
   tool.status = "running";
+  await refresh();
   await expect(page.locator('[data-kind="tool"][data-status="running"]')).toBeVisible();
   graph.revision++;
   graph.nodes.push({
@@ -241,6 +238,7 @@ test("新面料落定、任务起针和真实阶段切换、候选揭幕均只�
     y: 430,
     payload: { fabricId: "fabric-0" },
   });
+  await refresh();
   await effect(page, "material");
   graph.revision++;
   graph.nodes.push({
@@ -250,6 +248,7 @@ test("新面料落定、任务起针和真实阶段切换、候选揭幕均只�
     x: 80,
     y: 460,
   });
+  await refresh();
   await effect(page, "reveal");
   const sample = await page.evaluate(() =>
     window.coutureSamples.find((item) => item.effect === "reveal"),
@@ -338,7 +337,7 @@ test("面料上传成功反馈与真实加入画布后的落定", async ({ page 
     return route.fulfill({ json: graph });
   });
   await page.goto(`/${PROJECT}`);
-  await page.getByRole("button", { name: /添加素材/u }).click();
+  await page.getByRole("button", { name: "＋ 添加素材", exact: true }).click();
   await page.getByRole("button", { name: /面料库/u }).click();
   const library = page.getByRole("dialog", { name: "选择面料", exact: true });
   await library.getByRole("button", { name: /棉布/u }).first().click();
@@ -419,7 +418,7 @@ test("工作室保存与导出签章，恢复历史导出不重播", async ({ pa
   await observe(page);
   let style = styleFixture();
   const data = () =>
-    studioFixture({ styles: [style], techPacks: [techPackFixture()] });
+    studioFixture({ styles: [style], techPacks: [techPackFixture({ styleRevisionId: style.currentRevision.id })] });
   await page.route(`**/api/projects/${PROJECT}/studio`, (route) =>
     route.fulfill({ json: data() }),
   );
@@ -474,7 +473,9 @@ test("工作室保存与导出签章，恢复历史导出不重播", async ({ pa
   await page.getByLabel("款式名称", { exact: true }).fill("线迹高定夹克");
   await page.getByRole("button", { name: "保存修订", exact: true }).click();
   await effect(page, "seal");
-  await page.getByRole("tab", { name: "技术包", exact: true }).click();
+  await page.getByRole("button", { name: "项目菜单", exact: true }).click();
+  await page.getByRole("button", { name: "创作进展", exact: true }).click();
+  await page.getByRole("navigation", { name: "工作室资料接续" }).getByRole("button", { name: /技术包/ }).click();
   await page
     .getByRole("button", { name: "导出此修订 PDF", exact: true })
     .click();
