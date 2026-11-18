@@ -1,0 +1,15 @@
+diff --git a/lib/parse.js b/lib/parse.js
+--- a/lib/parse.js
++++ b/lib/parse.js
+@@ -540,7 +540,10 @@
+     const literal = input.slice(token.startIndex, state.index + 1);
+     const body = input.slice(token.startIndex + 2, state.index);
+     const analysis = analyzeRepeatedExtglob(body, opts);
++    // A wildcard inside a repeated group can introduce nested quantifiers
++    // even when the body has only one branch. Fail closed for those groups.
++    const containsWildcard = body.includes('*');
+ 
+-    if ((token.type === 'plus' || token.type === 'star') && analysis.risky) {
++    if ((token.type === 'plus' || token.type === 'star') && (analysis.risky || containsWildcard)) {
+       const safeOutput = analysis.safeOutput
+         ? (token.output ? '' : ONE_CHAR) + (opts.capture ? `(${analysis.safeOutput})` : analysis.safeOutput)

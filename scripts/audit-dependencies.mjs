@@ -4,6 +4,8 @@ import { dirname, extname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const patchedBracesAdvisory = "GHSA-vfj7-8cjw-p6xm";
+export const patchedPicomatchAdvisory = "GHSA-fc5q-39xc-vjpf";
+export const patchedPicomatchVersions = ["4.0.7"];
 const severities = ["info", "low", "moderate", "high", "critical"];
 const isRecord = (value) =>
   value !== null && typeof value === "object" && !Array.isArray(value);
@@ -15,7 +17,7 @@ const fail = (message) => {
 // must be reviewed instead of silently turning an audit failure into success.
 export function evaluateAuditReport(
   report,
-  { bracesPatchVerified = false } = {},
+  { bracesPatchVerified = false, picomatchPatchVerified = false } = {},
 ) {
   if (
     !isRecord(report) ||
@@ -85,17 +87,26 @@ export function evaluateAuditReport(
         fail("Malformed dependency audit finding");
       }
     }
-    if (advisory.github_advisory_id !== patchedBracesAdvisory) {
+    if (advisory.github_advisory_id === patchedBracesAdvisory) {
+      if (
+        !bracesPatchVerified ||
+        advisory.module_name !== "braces" ||
+        advisory.findings.some((finding) => finding.version !== "3.0.3")
+      ) {
+        fail("Braces advisory does not match the verified local 3.0.3 patch");
+      }
+    } else if (advisory.github_advisory_id === patchedPicomatchAdvisory) {
+      if (
+        !picomatchPatchVerified ||
+        advisory.module_name !== "picomatch" ||
+        advisory.findings.some((finding) => !patchedPicomatchVersions.includes(finding.version))
+      ) {
+        fail("Picomatch advisory does not match the verified local patches");
+      }
+    } else {
       fail(
         `Unpatched dependency advisory: ${advisory.github_advisory_id} (${advisory.module_name}, ${advisory.severity})`,
       );
-    }
-    if (
-      !bracesPatchVerified ||
-      advisory.module_name !== "braces" ||
-      advisory.findings.some((finding) => finding.version !== "3.0.3")
-    ) {
-      fail("Braces advisory does not match the verified local 3.0.3 patch");
     }
     patchedAdvisories += 1;
     reviewedCounts[advisory.severity] += 1;
@@ -181,9 +192,12 @@ function runAudit(productionOnly) {
     timeout: 60000,
     maxBuffer: 8 * 1024 * 1024,
   });
-  const evaluation = evaluateAuditProcess(audit, { bracesPatchVerified: true });
+  const evaluation = evaluateAuditProcess(audit, {
+    bracesPatchVerified: true,
+    picomatchPatchVerified: true,
+  });
   console.log(
-    `Dependency audit passed; verified local Braces advisories: ${evaluation.patchedAdvisories}`,
+    `Dependency audit passed; verified locally patched advisories: ${evaluation.patchedAdvisories}`,
   );
 }
 

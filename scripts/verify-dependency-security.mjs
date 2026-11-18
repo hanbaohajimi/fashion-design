@@ -1,14 +1,17 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { readFileSync, realpathSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import test from "node:test";
 import {
   evaluateAuditProcess,
   evaluateAuditReport,
   patchedBracesAdvisory,
+  patchedPicomatchAdvisory,
+  patchedPicomatchVersions,
 } from "./audit-dependencies.mjs";
 
 // Resolve the workspace's declared dependency, including pnpm's patch-specific
@@ -43,6 +46,70 @@ const patchContents = readFileSync(
 );
 const patchHash = createHash("sha256").update(patchContents).digest("hex");
 const patchedVersion = `3.0.3(patch_hash=${patchHash})`;
+
+// Hashes of the installed parser sources after the targeted local patches.
+const patchedPicomatchParserHashes = {
+  "4.0.7": "97dfd2146d12e03e62a3c1942c4f964b70f452dee66e8519f586bcbb71621cdf",
+};
+
+test("every locked and installed Picomatch parser uses the verified patch", () => {
+  const patchedVersions = patchedPicomatchVersions.map((version) => {
+    const patchPath = `patches/picomatch@${version}.patch`;
+    assert.equal(workspace.patchedDependencies?.[`picomatch@${version}`], patchPath);
+    const patch = readFileSync(new URL(`../${patchPath}`, import.meta.url));
+    const hash = createHash("sha256").update(patch).digest("hex");
+    assert.equal(lock.patchedDependencies?.[`picomatch@${version}`], hash);
+    return `${version}(patch_hash=${hash})`;
+  });
+  assert.deepEqual(
+    Object.keys(lock.snapshots).filter((key) => key.startsWith("picomatch@")).sort(),
+    patchedVersions.map((version) => `picomatch@${version}`).sort(),
+  );
+  for (const snapshot of Object.values(lock.snapshots)) {
+    for (const kind of ["dependencies", "optionalDependencies"]) {
+      if (snapshot[kind]?.picomatch) assert.ok(patchedVersions.includes(snapshot[kind].picomatch));
+    }
+  }
+  const root = fileURLToPath(new URL("../", import.meta.url));
+  const paths = Object.keys(lock.importers).map((name) => ({
+    directory: resolve(root, name), importer: true,
+  }));
+  const packages = new Map();
+  const visited = new Set();
+  // Walk the declared dependencies through Node's installed lookup paths.
+  for (const { directory, importer } of paths) {
+    if (visited.has(directory)) continue;
+    visited.add(directory);
+    const manifestPath = resolve(directory, "package.json");
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+    const loader = createRequire(manifestPath);
+    const dependencies = {
+      ...manifest.dependencies,
+      ...manifest.optionalDependencies,
+      ...manifest.peerDependencies,
+      ...(importer ? manifest.devDependencies : {}),
+    };
+    for (const name of Object.keys(dependencies)) {
+      const found = loader.resolve.paths(name)?.find((path) =>
+        existsSync(resolve(path, name, "package.json")),
+      );
+      if (!found) continue;
+      const pkg = realpathSync(resolve(found, name));
+      if (name === "picomatch") packages.set(pkg, directory);
+      paths.push({ directory: pkg, importer: false });
+    }
+  }
+  const verified = new Set();
+  for (const [pkg, consumer] of packages) {
+    const { version } = JSON.parse(readFileSync(resolve(pkg, "package.json"), "utf8"));
+    const parser = readFileSync(resolve(pkg, "lib/parse.js"), "utf8").replaceAll("\r\n", "\n");
+    assert.ok(patchedPicomatchVersions.includes(version));
+    assert.equal(createHash("sha256").update(parser).digest("hex"), patchedPicomatchParserHashes[version],
+      `Unverified Picomatch parser at ${pkg}, resolved from ${consumer}`);
+    verified.add(version);
+  }
+  assert.deepEqual([...verified].sort(), [...patchedPicomatchVersions].sort());
+});
 
 // SHA-256 of the original 3.0.3 files, verified against the npm tarball whose
 // SHA-512 integrity is recorded in pnpm-lock.yaml. Reversing every current patch
@@ -96,7 +163,7 @@ function verifyInstalledPatch(patchText, readInstalledFile) {
       const newLines = [];
       while (index + 1 < lines.length && !lines[index + 1].startsWith("@@")) {
         const line = lines[++index];
-        assert.ok(/^[ +\-]/.test(line), "Review unsupported patch content");
+        assert.ok(/^[ +-]/.test(line), "Review unsupported patch content");
         if (!line.startsWith("+")) oldLines.push(line.slice(1));
         if (!line.startsWith("-")) newLines.push(line.slice(1));
       }
@@ -339,6 +406,20 @@ test("audit evaluator permits only the verified Braces finding, including stale 
     patchedAdvisories: 0,
     advisories: 0,
   });
+});
+
+test("audit evaluator requires both a verified Picomatch patch and a known version", () => {
+  const report = (version) => auditFixture({
+    1: {
+      module_name: "picomatch",
+      severity: "high",
+      github_advisory_id: patchedPicomatchAdvisory,
+      findings: [{ version, paths: [".>micromatch>picomatch"] }],
+    },
+  });
+  assert.throws(() => evaluateAuditReport(report("4.0.7")), /verified local patches/);
+  assert.throws(() => evaluateAuditReport(report("4.0.6"), { picomatchPatchVerified: true }), /verified local patches/);
+  assert.equal(evaluateAuditReport(report("4.0.7"), { picomatchPatchVerified: true }).patchedAdvisories, 1);
 });
 
 test("audit evaluator rejects new advisories and unpatched Braces versions", () => {
